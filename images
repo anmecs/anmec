@@ -1,1 +1,16 @@
-images/.gitkeep
+images/
+ ├─ logo/
+ │   └─ anmec-logo.png
+ ├─ banner/
+ │   ├─ hero.jpg
+ │   └─ .gitkeep
+ ├─ product/
+ │   ├─ p01.png
+ │   ├─ p02.png
+ │   └─ p03.png
+ └─ icon/
+     ├─ facebook.svg
+     └─ line.svg
+      
+
+

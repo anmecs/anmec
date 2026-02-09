@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Simple Form</title>
+</head>
+<body>
+  <h2>กรอกข้อมูล</h2>
+
+  <form action="https://script.google.com/macros/s/AKfycby0wxG_UH33xmFgi3CfIyaal5GjD-cJP58ku2O5fgHXN-eKYDuOo1pv7SC7pw-_e7GF/exec" method="POST">
+    <label>ชื่อ</label><br/>
+    <input name="name" placeholder="ชื่อ" required><br/><br/>
+
+    <label>เบอร์โทร</label><br/>
+    <input name="phone" placeholder="เบอร์โทร"><br/><br/>
+
+    <label>หมายเหตุ</label><br/>
+    <textarea name="note" placeholder="หมายเหตุ"></textarea><br/><br/>
+
+    <button type="submit">ส่งข้อมูล</button>
+  </form>
+
+  <p>หลังจากกดส่ง หน้าจะเปลี่ยนไปขึ้นคำว่า <b>saved</b> แล้วให้กลับไปดูใน Google Sheet ว่ามีแถวใหม่เพิ่ม</p>
+</body>
+</html>

@@ -7,9 +7,6 @@
     <link rel="apple-touch-icon" href="icon.png">
     <link rel="icon" href="icon.png">
 
-    <!-- ✅ iPhone-friendly barcode scanner -->
-    <script src="https://unpkg.com/html5-qrcode"></script>
-
     <style>
       :root{
         --bg:#ffffff;
@@ -151,36 +148,14 @@
         color:#9ca3af;
       }
 
-      /* ---------- Camera UI ---------- */
-      .scanRow{
-        display:flex;
-        gap:8px;
-        align-items:center;
-      }
-      .scanRow input{ flex:1; }
-
-      .scanBtn{
-        padding:10px 12px;
-        min-width:48px;
-        display:inline-flex;
-        align-items:center;
-        justify-content:center;
-      }
-
-      /* html5-qrcode container */
-      #reader{
-        display:none;
+      /* กล่องแสดงกล้อง */
+      .videoWrap{
         margin-top:10px;
-        border:1px solid var(--border);
-        border-radius:12px;
-        overflow:hidden;
-        background:#000;
       }
-
-      .smallBtn{
-        padding:8px 10px;
-        font-size:15px;
+      video{
+        width:100%;
         border-radius:12px;
+        border:1px solid var(--border);
       }
     </style>
   </head>
@@ -193,16 +168,18 @@
         <div class="field">
           <div class="label">Barcode (แตะช่องนี้แล้วสแกน)</div>
 
-          <div class="scanRow">
+          <!-- ✅ input + ปุ่มกล้อง -->
+          <div style="display:flex; gap:8px; align-items:center;">
             <input id="barcode" type="tel" inputmode="numeric" pattern="[0-9]*"
-                   placeholder="Scan barcode..." autocomplete="off">
-            <button class="scanBtn" type="button" onclick="startScan()">📷</button>
+                   placeholder="Scan barcode..." autocomplete="off"
+                   style="flex:1;">
+            <button type="button" onclick="startScan()" title="Scan barcode">📷</button>
           </div>
 
-          <div id="reader"></div>
-          <button id="closeScanBtn" class="smallBtn" type="button" onclick="stopScan()" style="display:none;margin-top:8px;">
-            ✕ Close
-          </button>
+          <!-- ✅ preview กล้อง -->
+          <div class="videoWrap">
+            <video id="preview" playsinline style="display:none;"></video>
+          </div>
         </div>
 
         <div class="field">
@@ -271,7 +248,7 @@
       // ✅ ใส่ลิ้งค์ Apps Script ใหม่ตรงนี้
       const ENDPOINT = "https://script.google.com/macros/s/AKfycbwFSvXlrOZWZNnOlFAG6zOgJWimvdO4o_vOdOJejxfTf2ZSn9N82RLocmNxAryRrk_3lg/exec";
 
-      // ✅ ตัวเลขเท่านั้น (กัน paste/คีย์บอร์ดอื่น)
+      // ✅ บังคับให้เป็น "ตัวเลขเท่านั้น" (กัน paste/คีย์บอร์ดอื่น)
       function digitsOnly(el){
         el.value = (el.value || '').replace(/\D+/g, '');
       }
@@ -281,76 +258,87 @@
       });
 
       /* =========================
-       *  CAMERA BARCODE SCAN (html5-qrcode)
+       *  ✅ CAMERA BARCODE SCANNER
        * ========================= */
-      let html5QrCode = null;
+      let stream = null;
+      let detector = null;
       let scanning = false;
 
       async function startScan() {
-        try{
-          if (scanning) return;
+        // ต้องกดจาก user interaction ถึงจะเปิดกล้องได้
+        if (!('BarcodeDetector' in window)) {
+          setStatus('This browser does not support camera barcode scanning.', 'err');
+          return;
+        }
 
-          if (!window.Html5Qrcode) {
-            setStatus('Scanner library not loaded', 'err');
-            return;
-          }
+        try {
+          setStatus('Opening camera...', '');
+          detector = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128','qr_code'] });
 
-          $('reader').style.display = 'block';
-          $('closeScanBtn').style.display = 'inline-block';
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' } }
+          });
 
-          if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
-
-          const devices = await Html5Qrcode.getCameras();
-          if (!devices || !devices.length) {
-            setStatus('No camera found', 'err');
-            stopScan();
-            return;
-          }
-
-          // เลือกกล้องหลัง ถ้าเจอ; ไม่เจอใช้ตัวแรก
-          const back = devices.find(d => String(d.label || '').toLowerCase().includes('back'));
-          const cameraId = (back && back.id) ? back.id : devices[0].id;
+          const video = $('preview');
+          video.srcObject = stream;
+          video.style.display = 'block';
+          await video.play();
 
           scanning = true;
+          requestAnimationFrame(scanFrame);
+          setStatus('Scanning... aim at the barcode', '');
 
-          await html5QrCode.start(
-            cameraId,
-            { fps: 10, qrbox: 220, aspectRatio: 1.0 },
-            (decodedText) => {
-              // ได้ค่าแล้ว
-              $('barcode').value = String(decodedText || '').trim();
-              digitsOnly($('barcode'));
-              setStatus('Scanned ✅', 'ok');
-              stopScan();
-              $('barcode').focus();
-            },
-            (_err) => { /* ignore per-frame errors */ }
-          );
-
-        } catch (e) {
-          setStatus('Camera error: ' + (e?.message || e), 'err');
-          stopScan();
+        } catch (err) {
+          setStatus('Camera error: ' + (err?.message || err), 'err');
         }
       }
 
-      async function stopScan() {
-        try{
-          scanning = false;
-          if (html5QrCode && html5QrCode.isScanning) {
-            await html5QrCode.stop();
-          }
-          if (html5QrCode) {
-            // เคลียร์ UI ของ reader
-            html5QrCode.clear();
-          }
-        } catch (_) {}
+      async function scanFrame() {
+        if (!scanning) return;
 
-        $('reader').style.display = 'none';
-        $('closeScanBtn').style.display = 'none';
+        const video = $('preview');
+        try {
+          const barcodes = await detector.detect(video);
+          if (barcodes && barcodes.length) {
+            const code = String(barcodes[0].rawValue || '').trim();
+            if (code) {
+              $('barcode').value = code;
+              digitsOnly($('barcode'));
+              stopScan();
+              setStatus('Scanned ✅', 'ok');
+              return;
+            }
+          }
+        } catch (err) {
+          // ไม่ต้องโชว์ error ทุกเฟรม
+          console.log(err);
+        }
+
+        requestAnimationFrame(scanFrame);
       }
 
+      function stopScan() {
+        scanning = false;
+        const video = $('preview');
+
+        if (stream) {
+          stream.getTracks().forEach(t => t.stop());
+          stream = null;
+        }
+        if (video) {
+          video.pause();
+          video.srcObject = null;
+          video.style.display = 'none';
+        }
+      }
+
+      // ปิดกล้องถ้า user เปลี่ยนหน้า/ย่อแอป
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) stopScan();
+      });
+
       /* =========================
-       *  FORM LOGIC (เดิม)
+       *  ORIGINAL LOGIC (เดิม)
        * ========================= */
       function applyTypeRules() {
         const t = $('type').value;
@@ -407,6 +395,7 @@
 
       async function submitEntry() {
         applyTypeRules();
+        stopScan();
 
         const payload = {
           barcode: $('barcode').value.trim(),

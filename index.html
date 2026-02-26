@@ -26,10 +26,9 @@
         font-family: system-ui, -apple-system, Arial;
       }
 
-      /* ✅ ทำให้ "ทุกช่องสั้นลง" ด้วยการลดความกว้างทั้งหน้า */
       .page{
         width:100%;
-        max-width: 320px;   /* ~ครึ่งของ 560 */
+        max-width: 320px;
         margin:0 auto;
         padding:18px 12px 28px;
       }
@@ -148,6 +147,52 @@
         background:#f3f4f6;
         color:#9ca3af;
       }
+
+      /* ---------- Camera UI ---------- */
+      .scanRow{
+        display:flex;
+        gap:8px;
+        align-items:center;
+      }
+      .scanRow input{ flex:1; }
+
+      .scanBtn{
+        padding:10px 12px;
+        min-width:48px;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+      }
+
+      .scanWrap{
+        display:none;
+        margin-top:10px;
+        border:1px solid var(--border);
+        border-radius:12px;
+        overflow:hidden;
+        background:#000;
+      }
+      video#preview{
+        width:100%;
+        display:block;
+      }
+      .scanBar{
+        display:flex;
+        justify-content:space-between;
+        gap:8px;
+        padding:8px;
+        background:#fff;
+      }
+      .scanHint{
+        font-size:13px;
+        color:var(--muted);
+        line-height:1.2;
+      }
+      .smallBtn{
+        padding:8px 10px;
+        font-size:15px;
+        border-radius:12px;
+      }
     </style>
   </head>
 
@@ -158,9 +203,23 @@
       <div class="card">
         <div class="field">
           <div class="label">Barcode (แตะช่องนี้แล้วสแกน)</div>
-          <!-- ✅ numpad + ตัวเลขล้วน -->
-          <input id="barcode" type="tel" inputmode="numeric" pattern="[0-9]*"
-                 placeholder="Scan barcode..." autocomplete="off">
+
+          <div class="scanRow">
+            <input id="barcode" type="tel" inputmode="numeric" pattern="[0-9]*"
+                   placeholder="Scan barcode..." autocomplete="off">
+            <button class="scanBtn" type="button" onclick="startScan()">📷</button>
+          </div>
+
+          <div id="scanWrap" class="scanWrap">
+            <video id="preview" playsinline></video>
+            <div class="scanBar">
+              <div class="scanHint">
+                เปิดกล้องแล้ว — เล็งให้ barcode อยู่กลางภาพ<br>
+                สแกนติดแล้วจะปิดอัตโนมัติ
+              </div>
+              <button class="smallBtn" type="button" onclick="stopScan()">✕ Close</button>
+            </div>
+          </div>
         </div>
 
         <div class="field">
@@ -198,7 +257,6 @@
 
         <div class="field">
           <div class="label">Qty</div>
-          <!-- ✅ numpad + ตัวเลขล้วน -->
           <input id="qty" type="tel" inputmode="numeric" pattern="[0-9]*" placeholder="Qty">
         </div>
 
@@ -230,7 +288,7 @@
       // ✅ ใส่ลิ้งค์ Apps Script ใหม่ตรงนี้
       const ENDPOINT = "https://script.google.com/macros/s/AKfycbwFSvXlrOZWZNnOlFAG6zOgJWimvdO4o_vOdOJejxfTf2ZSn9N82RLocmNxAryRrk_3lg/exec";
 
-      // ✅ บังคับให้เป็น "ตัวเลขเท่านั้น" (กัน paste/คีย์บอร์ดอื่น)
+      // ✅ ตัวเลขเท่านั้น (กัน paste/คีย์บอร์ดอื่น)
       function digitsOnly(el){
         el.value = (el.value || '').replace(/\D+/g, '');
       }
@@ -239,6 +297,95 @@
         el.addEventListener('input', () => digitsOnly(el));
       });
 
+      /* =========================
+       *  CAMERA BARCODE SCAN
+       * ========================= */
+      let _scanStream = null;
+      let _detector = null;
+      let _scanning = false;
+
+      function isSecureContextOk_(){
+        // Apps Script /exec เป็น https อยู่แล้ว แต่กันไว้
+        return window.isSecureContext || location.protocol === 'https:';
+      }
+
+      async function startScan() {
+        try{
+          if (!isSecureContextOk_()) {
+            setStatus('Camera requires HTTPS', 'err');
+            return;
+          }
+          if (!navigator.mediaDevices?.getUserMedia) {
+            setStatus('This browser cannot access camera', 'err');
+            return;
+          }
+          if (!('BarcodeDetector' in window)) {
+            setStatus('Barcode scan not supported on this device/browser', 'err');
+            return;
+          }
+
+          // formats ที่พบบ่อย: EAN13/EAN8/Code128/QR
+          _detector = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128','qr_code'] });
+
+          _scanStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' } },
+            audio: false
+          });
+
+          const video = $('preview');
+          video.srcObject = _scanStream;
+
+          $('scanWrap').style.display = 'block';
+
+          await video.play();
+
+          _scanning = true;
+          requestAnimationFrame(scanLoop_);
+        }catch(err){
+          setStatus('Camera error: ' + (err?.message || err), 'err');
+          stopScan();
+        }
+      }
+
+      async function scanLoop_(){
+        if (!_scanning) return;
+        const video = $('preview');
+
+        try{
+          const codes = await _detector.detect(video);
+          if (codes && codes.length){
+            const raw = String(codes[0].rawValue || '').trim();
+            if (raw){
+              $('barcode').value = raw;
+              digitsOnly($('barcode'));
+              stopScan();
+              $('barcode').focus();
+              setStatus('Scanned ✅', 'ok');
+              return;
+            }
+          }
+        }catch(_){ /* ignore frame errors */ }
+
+        requestAnimationFrame(scanLoop_);
+      }
+
+      function stopScan(){
+        _scanning = false;
+
+        const video = $('preview');
+        try{ video.pause(); } catch(_){}
+
+        if (_scanStream){
+          _scanStream.getTracks().forEach(t => t.stop());
+          _scanStream = null;
+        }
+
+        $('scanWrap').style.display = 'none';
+      }
+
+      /* =========================
+       *  FORM LOGIC (เดิม)
+       * ========================= */
       function applyTypeRules() {
         const t = $('type').value;
         $('whFrom').disabled = false;
@@ -261,6 +408,7 @@
       }
 
       function clearForm() {
+        stopScan();
         $('barcode').value = '';
         $('qty').value = '';
         $('note').value = '';

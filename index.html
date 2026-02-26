@@ -1,29 +1,252 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="th">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>ANMEC</title>
-  <link rel="apple-touch-icon" href="icon.png">
-  <link rel="icon" href="icon.png">
-</head>
-<body>
-  <h2>กรอกข้อมูล</h2>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ANMEC Stock</title>
+    <link rel="apple-touch-icon" href="icon.png">
+    <link rel="icon" href="icon.png">
 
-  <form action="https://script.google.com/macros/s/AKfycby0wxG_UH33xmFgi3CfIyaal5GjD-cJP58ku2O5fgHXN-eKYDuOo1pv7SC7pw-_e7GF/exec" method="POST">
-    <label>ชื่อ</label><br/>
-    <input name="name" placeholder="ชื่อ" required><br/><br/>
+    <style>
+      body { font-family: system-ui, -apple-system, Arial; margin: 14px; }
+      h2 { margin: 0 0 10px 0; }
+      .card { padding: 12px; border: 1px solid #ddd; border-radius: 14px; box-shadow: 0 1px 4px rgba(0,0,0,.05); }
+      .row { display: flex; gap: 10px; flex-wrap: wrap; }
+      .field { flex: 1; min-width: 170px; }
+      .field.wide { min-width: 260px; }
+      .label { color: #666; font-size: 13px; margin: 4px 0; }
+      input, select, button { font-size: 16px; padding: 10px; width: 100%; border-radius: 10px; border: 1px solid #ccc; }
+      button { width: auto; border: none; padding: 10px 14px; cursor: pointer; }
+      .btnRow { display:flex; gap:10px; align-items:center; justify-content:flex-end; }
+      .status { margin-top: 8px; color: #444; font-size: 13px; }
+      .ok { color: #0a7; }
+      .err { color: #c33; }
 
-    <label>เบอร์โทร</label><br/>
-    <input name="phone" placeholder="เบอร์โทร"><br/><br/>
+      table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+      th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; font-size: 13px; vertical-align: top; }
+      th { position: sticky; top: 0; background: #fff; }
+      .muted { color: #666; font-size: 13px; margin-top: 10px; }
+      .pill { display:inline-block; padding:2px 8px; border:1px solid #ddd; border-radius:999px; font-size:12px; color:#444; }
+    </style>
+  </head>
 
-    <label>หมายเหตุ</label><br/>
-    <textarea name="note" placeholder="หมายเหตุ"></textarea><br/><br/>
+  <body>
+    <h2>Stock Entry</h2>
 
-    <button type="submit">ส่งข้อมูล</button>
-  </form>
+    <div class="card">
+      <div class="row">
+        <div class="field wide">
+          <div class="label">Barcode (แตะช่องนี้แล้วสแกน)</div>
+          <input id="barcode" placeholder="Scan barcode..." autocomplete="off" inputmode="numeric">
+        </div>
 
-  <p>หลังจากกดส่ง หน้าจะเปลี่ยนไปขึ้นคำว่า <b>saved</b> แล้วให้กลับไปดูใน Google Sheet ว่ามีแถวใหม่เพิ่ม</p>
-</body>
+        <div class="field">
+          <div class="label">Type</div>
+          <select id="type">
+            <option value="IN_PURCHASE">IN_PURCHASE (EXT → WH)</option>
+            <option value="IN_RETURN">IN_RETURN (CUS → WH)</option>
+            <option value="OUT_SALE">OUT_SALE (WH → CUS)</option>
+            <option value="OUT_LOAN">OUT_LOAN (WH → EXT)</option>
+            <option value="TRANSFER">TRANSFER (WH → WH)</option>
+            <option value="ADJ_PLUS">ADJ_PLUS (EXT → WH)</option>
+            <option value="ADJ_MINUS">ADJ_MINUS (WH → EXT)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <div class="field">
+          <div class="label">WH From</div>
+          <select id="whFrom">
+            <option value="">(auto/none)</option>
+            <option value="BKK">BKK</option>
+            <option value="CHB">CHB</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <div class="label">WH To</div>
+          <select id="whTo">
+            <option value="">(auto/none)</option>
+            <option value="BKK">BKK</option>
+            <option value="CHB">CHB</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <div class="label">Qty</div>
+          <input id="qty" type="number" step="1" min="0" placeholder="Qty">
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <div class="field wide">
+          <div class="label">Note</div>
+          <input id="note" placeholder="Optional note...">
+        </div>
+
+        <div class="field" style="min-width: 240px;">
+          <div class="label">Actions</div>
+          <div class="btnRow">
+            <button onclick="submitEntry()">Save</button>
+            <button onclick="refresh()">Refresh</button>
+            <button onclick="clearForm()">Clear</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="status" class="status"></div>
+      <div class="muted">Tip: หลัง Save ระบบจะเคลียร์ Barcode/Qty/Note แล้วโฟกัสกลับไปที่ Barcode ให้อัตโนมัติ</div>
+    </div>
+
+    <h3 style="margin:16px 0 8px 0;">Recent Movements <span class="pill" id="badge">Loading...</span></h3>
+    <div class="card" id="tableWrap">Loading...</div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+
+      // ✅ ใส่ลิ้งค์ Apps Script ใหม่ตรงนี้
+      const ENDPOINT = "https://script.google.com/macros/s/AKfycbwFSvXlrOZWZNnOlFAG6zOgJWimvdO4o_vOdOJejxfTf2ZSn9N82RLocmNxAryRrk_3lg/exec";
+
+      function applyTypeRules() {
+        const t = $('type').value;
+        $('whFrom').disabled = false;
+        $('whTo').disabled = false;
+
+        if (['IN_PURCHASE','IN_RETURN','ADJ_PLUS'].includes(t)) {
+          $('whFrom').value = '';
+          $('whFrom').disabled = true;
+        } else if (['OUT_SALE','OUT_LOAN','ADJ_MINUS'].includes(t)) {
+          $('whTo').value = '';
+          $('whTo').disabled = true;
+        }
+      }
+      $('type').addEventListener('change', applyTypeRules);
+
+      function setStatus(msg, kind) {
+        const el = $('status');
+        el.className = 'status ' + (kind === 'ok' ? 'ok' : kind === 'err' ? 'err' : '');
+        el.textContent = msg || '';
+      }
+
+      function clearForm() {
+        $('barcode').value = '';
+        $('qty').value = '';
+        $('note').value = '';
+        $('barcode').focus();
+        setStatus('');
+      }
+
+      function validate(payload) {
+        if (!payload.barcode) return 'Please scan/enter barcode';
+        if (!payload.type) return 'Please select Type';
+        if (!payload.qty || Number(payload.qty) <= 0) return 'Qty must be > 0';
+
+        const t = payload.type;
+        const OWN = ['BKK','CHB'];
+
+        if (['IN_PURCHASE','IN_RETURN','ADJ_PLUS'].includes(t)) {
+          if (!OWN.includes(payload.whTo)) return `${t}: Choose WH_To (BKK/CHB)`;
+        }
+        if (['OUT_SALE','OUT_LOAN','ADJ_MINUS'].includes(t)) {
+          if (!OWN.includes(payload.whFrom)) return `${t}: Choose WH_From (BKK/CHB)`;
+        }
+        if (t === 'TRANSFER') {
+          if (!OWN.includes(payload.whFrom) || !OWN.includes(payload.whTo)) return 'TRANSFER: Choose both WH_From and WH_To';
+          if (payload.whFrom === payload.whTo) return 'TRANSFER: WH_From cannot equal WH_To';
+        }
+        return '';
+      }
+
+      async function submitEntry() {
+        applyTypeRules();
+
+        const payload = {
+          barcode: $('barcode').value.trim(),
+          type: $('type').value,
+          whFrom: $('whFrom').value,
+          whTo: $('whTo').value,
+          qty: $('qty').value,
+          note: $('note').value.trim(),
+        };
+
+        const err = validate(payload);
+        if (err) return setStatus(err, 'err');
+
+        setStatus('Saving...');
+
+        try {
+          const body = new URLSearchParams(payload);
+
+          const res = await fetch(ENDPOINT, { method: 'POST', body });
+          const data = await res.json().catch(() => ({}));
+
+          if (!data.ok) throw new Error(data.error || 'Save failed');
+
+          setStatus('Saved ✅', 'ok');
+          $('barcode').value = '';
+          $('qty').value = '';
+          $('note').value = '';
+          $('barcode').focus();
+          refresh();
+        } catch (e) {
+          setStatus('Error: ' + (e?.message || e), 'err');
+        }
+      }
+
+      async function refresh() {
+        $('badge').textContent = 'Loading...';
+        try {
+          const url = ENDPOINT + '?fn=getRecentEntries&limit=30';
+          const res = await fetch(url, { method: 'GET' });
+          const data = await res.json();
+
+          renderTable(data);
+        } catch (e) {
+          $('tableWrap').textContent = 'Error loading: ' + (e?.message || e);
+          $('badge').textContent = 'Error';
+        }
+      }
+
+      function renderTable(data) {
+        const headers = data.headers || [];
+        const rows = data.rows || [];
+        $('badge').textContent = rows.length ? `${rows.length} rows` : '0 rows';
+
+        if (!rows.length) {
+          $('tableWrap').textContent = 'No movements yet.';
+          return;
+        }
+
+        let html = '<table><thead><tr>';
+        headers.forEach(h => html += `<th>${escapeHtml(String(h))}</th>`);
+        html += '</tr></thead><tbody>';
+
+        rows.forEach(r => {
+          html += '<tr>';
+          r.forEach(c => html += `<td>${escapeHtml(String(c ?? ''))}</td>`);
+          html += '</tr>';
+        });
+
+        html += '</tbody></table>';
+        $('tableWrap').innerHTML = html;
+      }
+
+      function escapeHtml(s) {
+        return s.replace(/[&<>"']/g, m => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+        }[m]));
+      }
+
+      window.onload = () => {
+        applyTypeRules();
+        $('barcode').focus();
+        refresh();
+      };
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') submitEntry();
+      });
+    </script>
+  </body>
 </html>
-

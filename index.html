@@ -25,40 +25,45 @@
         color:var(--text);
         font-family: system-ui, -apple-system, Arial;
       }
+
+      /* ✅ ทำให้ "ทุกช่องสั้นลง" ด้วยการลดความกว้างทั้งหน้า */
       .page{
-        max-width:560px;
+        width:100%;
+        max-width: 320px;   /* ~ครึ่งของ 560 */
         margin:0 auto;
-        padding:22px 18px 36px;
+        padding:18px 12px 28px;
       }
+
       h2{
-        margin:6px 0 14px;
-        font-size:34px;
+        margin:6px 0 12px;
+        font-size:32px;
         letter-spacing:-0.02em;
       }
 
       .card{
-        padding:16px;
+        padding:14px;
         border:1px solid var(--border);
         border-radius:var(--radius);
         background:#fff;
       }
 
-      .field{ margin-bottom:14px; }
+      .field{ margin-bottom:12px; }
       .label{
         color:var(--muted);
         font-size:14px;
         margin:0 0 6px;
       }
+
       input, select, textarea{
         width:100%;
         border:1px solid var(--border);
         border-radius:12px;
-        padding:12px 12px;
-        font-size:18px;
+        padding:10px 10px;
+        font-size:17px;
         outline:none;
         background:#fff;
       }
-      textarea{ min-height:64px; resize:vertical; }
+      textarea{ min-height:62px; resize:vertical; }
 
       input:focus, select:focus, textarea:focus{
         border-color:#cbd5e1;
@@ -68,14 +73,14 @@
       .row2{
         display:grid;
         grid-template-columns:1fr 1fr;
-        gap:12px;
+        gap:10px;
       }
 
       .actionsLabel{ margin:8px 0 8px; color:var(--muted); font-size:14px; }
 
       .btnRow{
         display:flex;
-        gap:12px;
+        gap:10px;
         justify-content:flex-end;
         flex-wrap:wrap;
       }
@@ -83,8 +88,8 @@
         border:1px solid var(--border);
         background:var(--soft);
         color:#2563eb;
-        padding:12px 18px;
-        font-size:18px;
+        padding:10px 14px;
+        font-size:17px;
         border-radius:14px;
         cursor:pointer;
       }
@@ -92,7 +97,7 @@
 
       .status{
         margin-top:10px;
-        font-size:16px;
+        font-size:15px;
         font-weight:600;
       }
       .ok{ color:var(--ok); }
@@ -101,7 +106,7 @@
       .muted{
         margin-top:10px;
         color:var(--muted);
-        font-size:15px;
+        font-size:14px;
         line-height:1.35;
       }
 
@@ -109,8 +114,8 @@
         display:flex;
         align-items:center;
         gap:10px;
-        margin:18px 0 10px;
-        font-size:26px;
+        margin:16px 0 10px;
+        font-size:22px;
         font-weight:800;
         letter-spacing:-0.02em;
       }
@@ -119,18 +124,17 @@
         padding:4px 10px;
         border:1px solid var(--border);
         border-radius:999px;
-        font-size:14px;
+        font-size:13px;
         color:var(--muted);
         font-weight:500;
       }
 
-      /* table (ใช้ของเดิม แต่ทำให้ดูสะอาดขึ้น) */
       table{ width:100%; border-collapse:collapse; margin-top: 0; }
       th, td{
         border-bottom: 1px solid var(--border);
-        padding:10px 8px;
+        padding:9px 6px;
         text-align:left;
-        font-size:13px;
+        font-size:12.5px;
         vertical-align:top;
       }
       th{
@@ -140,7 +144,6 @@
         z-index:1;
       }
 
-      /* กัน select/inputs disabled ดูเหมือนในรูป */
       select:disabled, input:disabled{
         background:#f3f4f6;
         color:#9ca3af;
@@ -155,8 +158,9 @@
       <div class="card">
         <div class="field">
           <div class="label">Barcode (แตะช่องนี้แล้วสแกน)</div>
-          <!-- iOS numpad -->
-          <input id="barcode" type="tel" inputmode="numeric" pattern="[0-9]*" placeholder="Scan barcode..." autocomplete="off">
+          <!-- ✅ numpad + ตัวเลขล้วน -->
+          <input id="barcode" type="tel" inputmode="numeric" pattern="[0-9]*"
+                 placeholder="Scan barcode..." autocomplete="off">
         </div>
 
         <div class="field">
@@ -194,7 +198,7 @@
 
         <div class="field">
           <div class="label">Qty</div>
-          <!-- ทำให้เด้ง numpad แบบ barcode -->
+          <!-- ✅ numpad + ตัวเลขล้วน -->
           <input id="qty" type="tel" inputmode="numeric" pattern="[0-9]*" placeholder="Qty">
         </div>
 
@@ -225,6 +229,15 @@
 
       // ✅ ใส่ลิ้งค์ Apps Script ใหม่ตรงนี้
       const ENDPOINT = "https://script.google.com/macros/s/AKfycbwFSvXlrOZWZNnOlFAG6zOgJWimvdO4o_vOdOJejxfTf2ZSn9N82RLocmNxAryRrk_3lg/exec";
+
+      // ✅ บังคับให้เป็น "ตัวเลขเท่านั้น" (กัน paste/คีย์บอร์ดอื่น)
+      function digitsOnly(el){
+        el.value = (el.value || '').replace(/\D+/g, '');
+      }
+      ['barcode','qty'].forEach(id => {
+        const el = $(id);
+        el.addEventListener('input', () => digitsOnly(el));
+      });
 
       function applyTypeRules() {
         const t = $('type').value;
@@ -258,7 +271,9 @@
       function validate(payload) {
         if (!payload.barcode) return 'Please scan/enter barcode';
         if (!payload.type) return 'Please select Type';
-        if (!payload.qty || Number(payload.qty) <= 0) return 'Qty must be > 0';
+
+        const q = Number(payload.qty);
+        if (!Number.isFinite(q) || q <= 0) return 'Qty must be > 0';
 
         const t = payload.type;
         const OWN = ['BKK','CHB'];

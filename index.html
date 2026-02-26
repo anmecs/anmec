@@ -1,256 +1,488 @@
-<script>
-  const $ = (id) => document.getElementById(id);
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>ANMEC Stock</title>
+    <link rel="apple-touch-icon" href="icon.png">
+    <link rel="icon" href="icon.png">
 
-  // ✅ ใช้ Vercel API Proxy (ตัด CORS)
-  const API = "/api/stock";
+    <style>
+      :root{
+        --bg:#ffffff;
+        --text:#111827;
+        --muted:#6b7280;
+        --border:#e5e7eb;
+        --soft:#f3f4f6;
+        --danger:#dc2626;
+        --ok:#0a7;
+        --radius:16px;
+      }
+      *{ box-sizing:border-box; }
+      body{
+        margin:0;
+        background:var(--bg);
+        color:var(--text);
+        font-family: system-ui, -apple-system, Arial;
+      }
 
-  // ✅ บังคับให้เป็น "ตัวเลขเท่านั้น" (กัน paste/คีย์บอร์ดอื่น)
-  function digitsOnly(el){
-    el.value = (el.value || '').replace(/\D+/g, '');
-  }
-  ['barcode','qty'].forEach(id => {
-    const el = $(id);
-    el.addEventListener('input', () => digitsOnly(el));
-  });
+      .page{
+        width:100%;
+        max-width: 320px;
+        margin:0 auto;
+        padding:18px 12px 28px;
+      }
 
-  /* =========================
-   *  ✅ CAMERA BARCODE SCANNER
-   * ========================= */
-  let stream = null;
-  let detector = null;
-  let scanning = false;
+      h2{
+        margin:6px 0 12px;
+        font-size:32px;
+        letter-spacing:-0.02em;
+      }
 
-  async function startScan() {
-    if (!('BarcodeDetector' in window)) {
-      setStatus('This browser does not support camera barcode scanning.', 'err');
-      return;
-    }
+      .card{
+        padding:14px;
+        border:1px solid var(--border);
+        border-radius:var(--radius);
+        background:#fff;
+      }
 
-    try {
-      setStatus('Opening camera...', '');
-      detector = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128','qr_code'] });
+      .field{ margin-bottom:12px; }
+      .label{
+        color:var(--muted);
+        font-size:14px;
+        margin:0 0 6px;
+      }
 
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } }
+      input, select, textarea{
+        width:100%;
+        border:1px solid var(--border);
+        border-radius:12px;
+        padding:10px 10px;
+        font-size:17px;
+        outline:none;
+        background:#fff;
+      }
+      textarea{ min-height:62px; resize:vertical; }
+
+      input:focus, select:focus, textarea:focus{
+        border-color:#cbd5e1;
+        box-shadow:0 0 0 3px rgba(59,130,246,.12);
+      }
+
+      .row2{
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:10px;
+      }
+
+      .actionsLabel{ margin:8px 0 8px; color:var(--muted); font-size:14px; }
+
+      .btnRow{
+        display:flex;
+        gap:10px;
+        justify-content:flex-end;
+        flex-wrap:wrap;
+      }
+      button{
+        border:1px solid var(--border);
+        background:var(--soft);
+        color:#2563eb;
+        padding:10px 14px;
+        font-size:17px;
+        border-radius:14px;
+        cursor:pointer;
+      }
+      button:active{ transform:scale(.99); }
+
+      .status{
+        margin-top:10px;
+        font-size:15px;
+        font-weight:600;
+      }
+      .ok{ color:var(--ok); }
+      .err{ color:var(--danger); }
+
+      .muted{
+        margin-top:10px;
+        color:var(--muted);
+        font-size:14px;
+        line-height:1.35;
+      }
+
+      .sectionTitle{
+        display:flex;
+        align-items:center;
+        gap:10px;
+        margin:16px 0 10px;
+        font-size:22px;
+        font-weight:800;
+        letter-spacing:-0.02em;
+      }
+      .pill{
+        display:inline-block;
+        padding:4px 10px;
+        border:1px solid var(--border);
+        border-radius:999px;
+        font-size:13px;
+        color:var(--muted);
+        font-weight:500;
+      }
+
+      table{ width:100%; border-collapse:collapse; margin-top: 0; }
+      th, td{
+        border-bottom: 1px solid var(--border);
+        padding:9px 6px;
+        text-align:left;
+        font-size:12.5px;
+        vertical-align:top;
+      }
+      th{
+        position:sticky;
+        top:0;
+        background:#fff;
+        z-index:1;
+      }
+
+      select:disabled, input:disabled{
+        background:#f3f4f6;
+        color:#9ca3af;
+      }
+
+      /* กล่องแสดงกล้อง */
+      .videoWrap{
+        margin-top:10px;
+      }
+      video{
+        width:100%;
+        border-radius:12px;
+        border:1px solid var(--border);
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="page">
+      <h2>Stock Entry</h2>
+
+      <div class="card">
+        <div class="field">
+          <div class="label">Barcode (แตะช่องนี้แล้วสแกน)</div>
+
+          <!-- ✅ input + ปุ่มกล้อง -->
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input id="barcode" type="tel" inputmode="numeric" pattern="[0-9]*"
+                   placeholder="Scan barcode..." autocomplete="off"
+                   style="flex:1;">
+            <button type="button" onclick="startScan()" title="Scan barcode">📷</button>
+          </div>
+
+          <!-- ✅ preview กล้อง -->
+          <div class="videoWrap">
+            <video id="preview" playsinline style="display:none;"></video>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="label">Type</div>
+          <select id="type">
+            <option value="IN_PURCHASE">IN_PURCHASE (EXT → WH)</option>
+            <option value="IN_RETURN">IN_RETURN (CUS → WH)</option>
+            <option value="OUT_SALE">OUT_SALE (WH → CUS)</option>
+            <option value="OUT_LOAN">OUT_LOAN (WH → EXT)</option>
+            <option value="TRANSFER">TRANSFER (WH → WH)</option>
+            <option value="ADJ_PLUS">ADJ_PLUS (EXT → WH)</option>
+            <option value="ADJ_MINUS">ADJ_MINUS (WH → EXT)</option>
+          </select>
+        </div>
+
+        <div class="row2">
+          <div class="field">
+            <div class="label">WH From</div>
+            <select id="whFrom">
+              <option value="">(auto/none)</option>
+              <option value="BKK">BKK</option>
+              <option value="CHB">CHB</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <div class="label">WH To</div>
+            <select id="whTo">
+              <option value="">(auto/none)</option>
+              <option value="BKK">BKK</option>
+              <option value="CHB">CHB</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="label">Qty</div>
+          <input id="qty" type="tel" inputmode="numeric" pattern="[0-9]*" placeholder="Qty">
+        </div>
+
+        <div class="field">
+          <div class="label">Note</div>
+          <textarea id="note" placeholder="Optional note..."></textarea>
+        </div>
+
+        <div class="actionsLabel">Actions</div>
+        <div class="btnRow">
+          <button onclick="submitEntry()">Save</button>
+          <button onclick="refresh()">Refresh</button>
+          <button onclick="clearForm()">Clear</button>
+        </div>
+
+        <div id="status" class="status"></div>
+        <div class="muted">Tip: หลัง Save ระบบจะเคลียร์ Barcode/Qty/Note แล้วโฟกัสกลับไปที่ Barcode ให้อัตโนมัติ</div>
+      </div>
+
+      <div class="sectionTitle">
+        Recent Movements <span class="pill" id="badge">Loading...</span>
+      </div>
+      <div class="card" id="tableWrap">Loading...</div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+
+      // ✅ ใส่ลิ้งค์ Apps Script ใหม่ตรงนี้
+      const ENDPOINT = "https://script.google.com/macros/s/AKfycbwFSvXlrOZWZNnOlFAG6zOgJWimvdO4o_vOdOJejxfTf2ZSn9N82RLocmNxAryRrk_3lg/exec";
+
+      // ✅ บังคับให้เป็น "ตัวเลขเท่านั้น" (กัน paste/คีย์บอร์ดอื่น)
+      function digitsOnly(el){
+        el.value = (el.value || '').replace(/\D+/g, '');
+      }
+      ['barcode','qty'].forEach(id => {
+        const el = $(id);
+        el.addEventListener('input', () => digitsOnly(el));
       });
 
-      const video = $('preview');
-      video.srcObject = stream;
-      video.style.display = 'block';
-      await video.play();
+      /* =========================
+       *  ✅ CAMERA BARCODE SCANNER
+       * ========================= */
+      let stream = null;
+      let detector = null;
+      let scanning = false;
 
-      scanning = true;
-      requestAnimationFrame(scanFrame);
-      setStatus('Scanning... aim at the barcode', '');
-
-    } catch (err) {
-      setStatus('Camera error: ' + (err?.message || err), 'err');
-    }
-  }
-
-  async function scanFrame() {
-    if (!scanning) return;
-
-    const video = $('preview');
-    try {
-      const barcodes = await detector.detect(video);
-      if (barcodes && barcodes.length) {
-        const code = String(barcodes[0].rawValue || '').trim();
-        if (code) {
-          $('barcode').value = code;
-          digitsOnly($('barcode'));
-          stopScan();
-          setStatus('Scanned ✅', 'ok');
+      async function startScan() {
+        // ต้องกดจาก user interaction ถึงจะเปิดกล้องได้
+        if (!('BarcodeDetector' in window)) {
+          setStatus('This browser does not support camera barcode scanning.', 'err');
           return;
         }
+
+        try {
+          setStatus('Opening camera...', '');
+          detector = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128','qr_code'] });
+
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' } }
+          });
+
+          const video = $('preview');
+          video.srcObject = stream;
+          video.style.display = 'block';
+          await video.play();
+
+          scanning = true;
+          requestAnimationFrame(scanFrame);
+          setStatus('Scanning... aim at the barcode', '');
+
+        } catch (err) {
+          setStatus('Camera error: ' + (err?.message || err), 'err');
+        }
       }
-    } catch (err) {
-      console.log(err);
-    }
 
-    requestAnimationFrame(scanFrame);
-  }
+      async function scanFrame() {
+        if (!scanning) return;
 
-  function stopScan() {
-    scanning = false;
-    const video = $('preview');
+        const video = $('preview');
+        try {
+          const barcodes = await detector.detect(video);
+          if (barcodes && barcodes.length) {
+            const code = String(barcodes[0].rawValue || '').trim();
+            if (code) {
+              $('barcode').value = code;
+              digitsOnly($('barcode'));
+              stopScan();
+              setStatus('Scanned ✅', 'ok');
+              return;
+            }
+          }
+        } catch (err) {
+          // ไม่ต้องโชว์ error ทุกเฟรม
+          console.log(err);
+        }
 
-    if (stream) {
-      stream.getTracks().forEach(t => t.stop());
-      stream = null;
-    }
-    if (video) {
-      video.pause();
-      video.srcObject = null;
-      video.style.display = 'none';
-    }
-  }
+        requestAnimationFrame(scanFrame);
+      }
 
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) stopScan();
-  });
+      function stopScan() {
+        scanning = false;
+        const video = $('preview');
 
-  /* =========================
-   *  HELPERS (NEW)
-   * ========================= */
-  async function fetchJson(url, options) {
-    const res = await fetch(url, options);
-    const text = await res.text();
+        if (stream) {
+          stream.getTracks().forEach(t => t.stop());
+          stream = null;
+        }
+        if (video) {
+          video.pause();
+          video.srcObject = null;
+          video.style.display = 'none';
+        }
+      }
 
-    let data;
-    try { data = JSON.parse(text); }
-    catch { throw new Error("API not JSON: " + text.slice(0, 160)); }
-
-    if (!res.ok) {
-      throw new Error(data?.error || ("HTTP " + res.status));
-    }
-    return data;
-  }
-
-  /* =========================
-   *  ORIGINAL LOGIC
-   * ========================= */
-  function applyTypeRules() {
-    const t = $('type').value;
-    $('whFrom').disabled = false;
-    $('whTo').disabled = false;
-
-    if (['IN_PURCHASE','IN_RETURN','ADJ_PLUS'].includes(t)) {
-      $('whFrom').value = '';
-      $('whFrom').disabled = true;
-    } else if (['OUT_SALE','OUT_LOAN','ADJ_MINUS'].includes(t)) {
-      $('whTo').value = '';
-      $('whTo').disabled = true;
-    }
-  }
-  $('type').addEventListener('change', applyTypeRules);
-
-  function setStatus(msg, kind) {
-    const el = $('status');
-    el.className = 'status ' + (kind === 'ok' ? 'ok' : kind === 'err' ? 'err' : '');
-    el.textContent = msg || '';
-  }
-
-  function clearForm() {
-    stopScan();
-    $('barcode').value = '';
-    $('qty').value = '';
-    $('note').value = '';
-    $('barcode').focus();
-    setStatus('');
-  }
-
-  function validate(payload) {
-    if (!payload.barcode) return 'Please scan/enter barcode';
-    if (!payload.type) return 'Please select Type';
-
-    const q = Number(payload.qty);
-    if (!Number.isFinite(q) || q <= 0) return 'Qty must be > 0';
-
-    const t = payload.type;
-    const OWN = ['BKK','CHB'];
-
-    if (['IN_PURCHASE','IN_RETURN','ADJ_PLUS'].includes(t)) {
-      if (!OWN.includes(payload.whTo)) return `${t}: Choose WH_To (BKK/CHB)`;
-    }
-    if (['OUT_SALE','OUT_LOAN','ADJ_MINUS'].includes(t)) {
-      if (!OWN.includes(payload.whFrom)) return `${t}: Choose WH_From (BKK/CHB)`;
-    }
-    if (t === 'TRANSFER') {
-      if (!OWN.includes(payload.whFrom) || !OWN.includes(payload.whTo)) return 'TRANSFER: Choose both WH_From and WH_To';
-      if (payload.whFrom === payload.whTo) return 'TRANSFER: WH_From cannot equal WH_To';
-    }
-    return '';
-  }
-
-  async function submitEntry() {
-    applyTypeRules();
-    stopScan();
-
-    const payload = {
-      barcode: $('barcode').value.trim(),
-      type: $('type').value,
-      whFrom: $('whFrom').value,
-      whTo: $('whTo').value,
-      qty: $('qty').value,
-      note: $('note').value.trim(),
-    };
-
-    const err = validate(payload);
-    if (err) return setStatus(err, 'err');
-
-    setStatus('Saving...');
-
-    try {
-      // ✅ POST ไปที่ Vercel proxy แทน Apps Script ตรง ๆ
-      const data = await fetchJson(API, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+      // ปิดกล้องถ้า user เปลี่ยนหน้า/ย่อแอป
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) stopScan();
       });
 
-      if (!data.ok) throw new Error(data.error || 'Save failed');
+      /* =========================
+       *  ORIGINAL LOGIC (เดิม)
+       * ========================= */
+      function applyTypeRules() {
+        const t = $('type').value;
+        $('whFrom').disabled = false;
+        $('whTo').disabled = false;
 
-      setStatus('Saved ✅', 'ok');
-      $('barcode').value = '';
-      $('qty').value = '';
-      $('note').value = '';
-      $('barcode').focus();
-      refresh();
-    } catch (e) {
-      setStatus('Error: ' + (e?.message || e), 'err');
-    }
-  }
+        if (['IN_PURCHASE','IN_RETURN','ADJ_PLUS'].includes(t)) {
+          $('whFrom').value = '';
+          $('whFrom').disabled = true;
+        } else if (['OUT_SALE','OUT_LOAN','ADJ_MINUS'].includes(t)) {
+          $('whTo').value = '';
+          $('whTo').disabled = true;
+        }
+      }
+      $('type').addEventListener('change', applyTypeRules);
 
-  async function refresh() {
-    $('badge').textContent = 'Loading...';
-    try {
-      // ✅ GET ผ่าน Vercel proxy
-      const data = await fetchJson(`${API}?fn=getRecentEntries&limit=30`, { method: "GET" });
-      renderTable(data);
-    } catch (e) {
-      $('tableWrap').textContent = 'Error loading: ' + (e?.message || e);
-      $('badge').textContent = 'Error';
-    }
-  }
+      function setStatus(msg, kind) {
+        const el = $('status');
+        el.className = 'status ' + (kind === 'ok' ? 'ok' : kind === 'err' ? 'err' : '');
+        el.textContent = msg || '';
+      }
 
-  function renderTable(data) {
-    const headers = data.headers || [];
-    const rows = data.rows || [];
-    $('badge').textContent = rows.length ? `${rows.length} rows` : '0 rows';
+      function clearForm() {
+        stopScan();
+        $('barcode').value = '';
+        $('qty').value = '';
+        $('note').value = '';
+        $('barcode').focus();
+        setStatus('');
+      }
 
-    if (!rows.length) {
-      $('tableWrap').textContent = 'No movements yet.';
-      return;
-    }
+      function validate(payload) {
+        if (!payload.barcode) return 'Please scan/enter barcode';
+        if (!payload.type) return 'Please select Type';
 
-    let html = '<table><thead><tr>';
-    headers.forEach(h => html += `<th>${escapeHtml(String(h))}</th>`);
-    html += '</tr></thead><tbody>';
+        const q = Number(payload.qty);
+        if (!Number.isFinite(q) || q <= 0) return 'Qty must be > 0';
 
-    rows.forEach(r => {
-      html += '<tr>';
-      r.forEach(c => html += `<td>${escapeHtml(String(c ?? ''))}</td>`);
-      html += '</tr>';
-    });
+        const t = payload.type;
+        const OWN = ['BKK','CHB'];
 
-    html += '</tbody></table>';
-    $('tableWrap').innerHTML = html;
-  }
+        if (['IN_PURCHASE','IN_RETURN','ADJ_PLUS'].includes(t)) {
+          if (!OWN.includes(payload.whTo)) return `${t}: Choose WH_To (BKK/CHB)`;
+        }
+        if (['OUT_SALE','OUT_LOAN','ADJ_MINUS'].includes(t)) {
+          if (!OWN.includes(payload.whFrom)) return `${t}: Choose WH_From (BKK/CHB)`;
+        }
+        if (t === 'TRANSFER') {
+          if (!OWN.includes(payload.whFrom) || !OWN.includes(payload.whTo)) return 'TRANSFER: Choose both WH_From and WH_To';
+          if (payload.whFrom === payload.whTo) return 'TRANSFER: WH_From cannot equal WH_To';
+        }
+        return '';
+      }
 
-  function escapeHtml(s) {
-    return s.replace(/[&<>"']/g, m => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
-    }[m]));
-  }
+      async function submitEntry() {
+        applyTypeRules();
+        stopScan();
 
-  window.onload = () => {
-    applyTypeRules();
-    $('barcode').focus();
-    refresh();
-  };
+        const payload = {
+          barcode: $('barcode').value.trim(),
+          type: $('type').value,
+          whFrom: $('whFrom').value,
+          whTo: $('whTo').value,
+          qty: $('qty').value,
+          note: $('note').value.trim(),
+        };
 
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') submitEntry();
-  });
-</script>
+        const err = validate(payload);
+        if (err) return setStatus(err, 'err');
+
+        setStatus('Saving...');
+
+        try {
+          const body = new URLSearchParams(payload);
+
+          const res = await fetch(ENDPOINT, { method: 'POST', body });
+          const data = await res.json().catch(() => ({}));
+
+          if (!data.ok) throw new Error(data.error || 'Save failed');
+
+          setStatus('Saved ✅', 'ok');
+          $('barcode').value = '';
+          $('qty').value = '';
+          $('note').value = '';
+          $('barcode').focus();
+          refresh();
+        } catch (e) {
+          setStatus('Error: ' + (e?.message || e), 'err');
+        }
+      }
+
+      async function refresh() {
+        $('badge').textContent = 'Loading...';
+        try {
+          const url = ENDPOINT + '?fn=getRecentEntries&limit=30';
+          const res = await fetch(url, { method: 'GET' });
+          const data = await res.json();
+
+          renderTable(data);
+        } catch (e) {
+          $('tableWrap').textContent = 'Error loading: ' + (e?.message || e);
+          $('badge').textContent = 'Error';
+        }
+      }
+
+      function renderTable(data) {
+        const headers = data.headers || [];
+        const rows = data.rows || [];
+        $('badge').textContent = rows.length ? `${rows.length} rows` : '0 rows';
+
+        if (!rows.length) {
+          $('tableWrap').textContent = 'No movements yet.';
+          return;
+        }
+
+        let html = '<table><thead><tr>';
+        headers.forEach(h => html += `<th>${escapeHtml(String(h))}</th>`);
+        html += '</tr></thead><tbody>';
+
+        rows.forEach(r => {
+          html += '<tr>';
+          r.forEach(c => html += `<td>${escapeHtml(String(c ?? ''))}</td>`);
+          html += '</tr>';
+        });
+
+        html += '</tbody></table>';
+        $('tableWrap').innerHTML = html;
+      }
+
+      function escapeHtml(s) {
+        return s.replace(/[&<>"']/g, m => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+        }[m]));
+      }
+
+      window.onload = () => {
+        applyTypeRules();
+        $('barcode').focus();
+        refresh();
+      };
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') submitEntry();
+      });
+    </script>
+  </body>
+</html>

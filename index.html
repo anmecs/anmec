@@ -7,7 +7,6 @@
     <link rel="apple-touch-icon" href="icon.png">
     <link rel="icon" href="icon.png">
 
-    <!-- ✅ iPhone-friendly barcode scanner -->
     <script src="https://unpkg.com/html5-qrcode"></script>
 
     <style>
@@ -22,70 +21,23 @@
         --radius:16px;
       }
       *{ box-sizing:border-box; }
-      body{
-        margin:0;
-        background:var(--bg);
-        color:var(--text);
-        font-family: system-ui, -apple-system, Arial;
-      }
-
-      .page{
-        width:100%;
-        max-width: 320px;
-        margin:0 auto;
-        padding:18px 12px 28px;
-      }
-
-      h2{
-        margin:6px 0 12px;
-        font-size:32px;
-        letter-spacing:-0.02em;
-      }
-
-      .card{
-        padding:14px;
-        border:1px solid var(--border);
-        border-radius:var(--radius);
-        background:#fff;
-      }
-
+      body{ margin:0; background:var(--bg); color:var(--text); font-family: system-ui, -apple-system, Arial; }
+      .page{ width:100%; max-width: 320px; margin:0 auto; padding:18px 12px 28px; }
+      h2{ margin:6px 0 12px; font-size:32px; letter-spacing:-0.02em; }
+      .card{ padding:14px; border:1px solid var(--border); border-radius:var(--radius); background:#fff; }
       .field{ margin-bottom:12px; }
-      .label{
-        color:var(--muted);
-        font-size:14px;
-        margin:0 0 6px;
-      }
-
+      .label{ color:var(--muted); font-size:14px; margin:0 0 6px; }
       input, select, textarea{
-        width:100%;
-        border:1px solid var(--border);
-        border-radius:12px;
-        padding:10px 10px;
-        font-size:17px;
-        outline:none;
-        background:#fff;
+        width:100%; border:1px solid var(--border); border-radius:12px;
+        padding:10px 10px; font-size:17px; outline:none; background:#fff;
       }
       textarea{ min-height:62px; resize:vertical; }
-
       input:focus, select:focus, textarea:focus{
-        border-color:#cbd5e1;
-        box-shadow:0 0 0 3px rgba(59,130,246,.12);
+        border-color:#cbd5e1; box-shadow:0 0 0 3px rgba(59,130,246,.12);
       }
-
-      .row2{
-        display:grid;
-        grid-template-columns:1fr 1fr;
-        gap:10px;
-      }
-
+      .row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
       .actionsLabel{ margin:8px 0 8px; color:var(--muted); font-size:14px; }
-
-      .btnRow{
-        display:flex;
-        gap:10px;
-        justify-content:flex-end;
-        flex-wrap:wrap;
-      }
+      .btnRow{ display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; }
       button{
         border:1px solid var(--border);
         background:var(--soft);
@@ -96,92 +48,20 @@
         cursor:pointer;
       }
       button:active{ transform:scale(.99); }
-
-      .status{
-        margin-top:10px;
-        font-size:15px;
-        font-weight:600;
-      }
-      .ok{ color:var(--ok); }
-      .err{ color:var(--danger); }
-
-      .muted{
-        margin-top:10px;
-        color:var(--muted);
-        font-size:14px;
-        line-height:1.35;
-      }
-
-      .sectionTitle{
-        display:flex;
-        align-items:center;
-        gap:10px;
-        margin:16px 0 10px;
-        font-size:22px;
-        font-weight:800;
-        letter-spacing:-0.02em;
-      }
-      .pill{
-        display:inline-block;
-        padding:4px 10px;
-        border:1px solid var(--border);
-        border-radius:999px;
-        font-size:13px;
-        color:var(--muted);
-        font-weight:500;
-      }
-
+      .status{ margin-top:10px; font-size:15px; font-weight:600; }
+      .ok{ color:var(--ok); } .err{ color:var(--danger); }
+      .muted{ margin-top:10px; color:var(--muted); font-size:14px; line-height:1.35; }
+      .sectionTitle{ display:flex; align-items:center; gap:10px; margin:16px 0 10px; font-size:22px; font-weight:800; letter-spacing:-0.02em; }
+      .pill{ display:inline-block; padding:4px 10px; border:1px solid var(--border); border-radius:999px; font-size:13px; color:var(--muted); font-weight:500; }
       table{ width:100%; border-collapse:collapse; margin-top: 0; }
-      th, td{
-        border-bottom: 1px solid var(--border);
-        padding:9px 6px;
-        text-align:left;
-        font-size:12.5px;
-        vertical-align:top;
-      }
-      th{
-        position:sticky;
-        top:0;
-        background:#fff;
-        z-index:1;
-      }
-
-      select:disabled, input:disabled{
-        background:#f3f4f6;
-        color:#9ca3af;
-      }
-
-      /* ---------- Camera UI ---------- */
-      .scanRow{
-        display:flex;
-        gap:8px;
-        align-items:center;
-      }
+      th, td{ border-bottom: 1px solid var(--border); padding:9px 6px; text-align:left; font-size:12.5px; vertical-align:top; }
+      th{ position:sticky; top:0; background:#fff; z-index:1; }
+      select:disabled, input:disabled{ background:#f3f4f6; color:#9ca3af; }
+      .scanRow{ display:flex; gap:8px; align-items:center; }
       .scanRow input{ flex:1; }
-
-      .scanBtn{
-        padding:10px 12px;
-        min-width:48px;
-        display:inline-flex;
-        align-items:center;
-        justify-content:center;
-      }
-
-      /* html5-qrcode container */
-      #reader{
-        display:none;
-        margin-top:10px;
-        border:1px solid var(--border);
-        border-radius:12px;
-        overflow:hidden;
-        background:#000;
-      }
-
-      .smallBtn{
-        padding:8px 10px;
-        font-size:15px;
-        border-radius:12px;
-      }
+      .scanBtn{ padding:10px 12px; min-width:48px; display:inline-flex; align-items:center; justify-content:center; }
+      #reader{ display:none; margin-top:10px; border:1px solid var(--border); border-radius:12px; overflow:hidden; background:#000; }
+      .smallBtn{ padding:8px 10px; font-size:15px; border-radius:12px; }
     </style>
   </head>
 
@@ -192,7 +72,6 @@
       <div class="card">
         <div class="field">
           <div class="label">Barcode (แตะช่องนี้แล้วสแกน)</div>
-
           <div class="scanRow">
             <input id="barcode" type="tel" inputmode="numeric" pattern="[0-9]*"
                    placeholder="Scan barcode..." autocomplete="off">
@@ -268,32 +147,23 @@
     <script>
       const $ = (id) => document.getElementById(id);
 
-      // ✅ ใส่ลิ้งค์ Apps Script ใหม่ตรงนี้
+      // ✅ ใส่ "ลิงก์ googleusercontent" ตัวจริงของ deployment คุณตรงนี้
+      // ตัวอย่างหน้าตา: https://script.googleusercontent.com/macros/s/AKfycbxxxxxx/exec
       const ENDPOINT = "https://script.google.com/macros/s/AKfycbwFSvXlrOZWZNnOlFAG6zOgJWimvdO4o_vOdOJejxfTf2ZSn9N82RLocmNxAryRrk_3lg/exec";
 
-      // ✅ ตัวเลขเท่านั้น (กัน paste/คีย์บอร์ดอื่น)
-      function digitsOnly(el){
-        el.value = (el.value || '').replace(/\D+/g, '');
-      }
+      function digitsOnly(el){ el.value = (el.value || '').replace(/\D+/g, ''); }
       ['barcode','qty'].forEach(id => {
         const el = $(id);
         el.addEventListener('input', () => digitsOnly(el));
       });
 
-      /* =========================
-       *  CAMERA BARCODE SCAN (html5-qrcode)
-       * ========================= */
       let html5QrCode = null;
       let scanning = false;
 
       async function startScan() {
         try{
           if (scanning) return;
-
-          if (!window.Html5Qrcode) {
-            setStatus('Scanner library not loaded', 'err');
-            return;
-          }
+          if (!window.Html5Qrcode) { setStatus('Scanner library not loaded', 'err'); return; }
 
           $('reader').style.display = 'block';
           $('closeScanBtn').style.display = 'inline-block';
@@ -301,13 +171,8 @@
           if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
 
           const devices = await Html5Qrcode.getCameras();
-          if (!devices || !devices.length) {
-            setStatus('No camera found', 'err');
-            stopScan();
-            return;
-          }
+          if (!devices || !devices.length) { setStatus('No camera found', 'err'); stopScan(); return; }
 
-          // เลือกกล้องหลัง ถ้าเจอ; ไม่เจอใช้ตัวแรก
           const back = devices.find(d => String(d.label || '').toLowerCase().includes('back'));
           const cameraId = (back && back.id) ? back.id : devices[0].id;
 
@@ -317,16 +182,14 @@
             cameraId,
             { fps: 10, qrbox: 220, aspectRatio: 1.0 },
             (decodedText) => {
-              // ได้ค่าแล้ว
               $('barcode').value = String(decodedText || '').trim();
               digitsOnly($('barcode'));
               setStatus('Scanned ✅', 'ok');
               stopScan();
               $('barcode').focus();
             },
-            (_err) => { /* ignore per-frame errors */ }
+            (_err) => {}
           );
-
         } catch (e) {
           setStatus('Camera error: ' + (e?.message || e), 'err');
           stopScan();
@@ -336,22 +199,13 @@
       async function stopScan() {
         try{
           scanning = false;
-          if (html5QrCode && html5QrCode.isScanning) {
-            await html5QrCode.stop();
-          }
-          if (html5QrCode) {
-            // เคลียร์ UI ของ reader
-            html5QrCode.clear();
-          }
+          if (html5QrCode && html5QrCode.isScanning) await html5QrCode.stop();
+          if (html5QrCode) html5QrCode.clear();
         } catch (_) {}
-
         $('reader').style.display = 'none';
         $('closeScanBtn').style.display = 'none';
       }
 
-      /* =========================
-       *  FORM LOGIC (เดิม)
-       * ========================= */
       function applyTypeRules() {
         const t = $('type').value;
         $('whFrom').disabled = false;
@@ -447,7 +301,6 @@
           const url = ENDPOINT + '?fn=getRecentEntries&limit=30';
           const res = await fetch(url, { method: 'GET' });
           const data = await res.json();
-
           renderTable(data);
         } catch (e) {
           $('tableWrap').textContent = 'Error loading: ' + (e?.message || e);
@@ -460,10 +313,7 @@
         const rows = data.rows || [];
         $('badge').textContent = rows.length ? `${rows.length} rows` : '0 rows';
 
-        if (!rows.length) {
-          $('tableWrap').textContent = 'No movements yet.';
-          return;
-        }
+        if (!rows.length) { $('tableWrap').textContent = 'No movements yet.'; return; }
 
         let html = '<table><thead><tr>';
         headers.forEach(h => html += `<th>${escapeHtml(String(h))}</th>`);
@@ -485,16 +335,8 @@
         }[m]));
       }
 
-      window.onload = () => {
-        applyTypeRules();
-        $('barcode').focus();
-        refresh();
-      };
-
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') submitEntry();
-      });
+      window.onload = () => { applyTypeRules(); $('barcode').focus(); refresh(); };
+      document.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitEntry(); });
     </script>
   </body>
 </html>
-

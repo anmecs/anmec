@@ -7,7 +7,8 @@
     <link rel="apple-touch-icon" href="icon.png">
     <link rel="icon" href="icon.png">
 
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <!-- เปลี่ยนจาก unpkg -> jsDelivr (เสถียรกว่า) -->
+    <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/minified/html5-qrcode.min.js"></script>
 
     <style>
       :root{
@@ -147,15 +148,28 @@
     <script>
       const $ = (id) => document.getElementById(id);
 
-      // ✅ ใส่ "ลิงก์ googleusercontent" ตัวจริงของ deployment คุณตรงนี้
-      // ตัวอย่างหน้าตา: https://script.googleusercontent.com/macros/s/AKfycbxxxxxx/exec
-      const ENDPOINT = "https://script.google.com/macros/s/AKfycbwFSvXlrOZWZNnOlFAG6zOgJWimvdO4o_vOdOJejxfTf2ZSn9N82RLocmNxAryRrk_3lg/exec";
+      /**
+       * ✅ สำคัญ: ใช้ Vercel Proxy เพื่อแก้ CORS
+       * ต้องมี vercel.json rewrite /api/stock -> Apps Script /exec
+       */
+      const ENDPOINT = "/api/stock";
 
       function digitsOnly(el){ el.value = (el.value || '').replace(/\D+/g, ''); }
       ['barcode','qty'].forEach(id => {
         const el = $(id);
         el.addEventListener('input', () => digitsOnly(el));
       });
+
+      // fetch with timeout (ช่วยให้ error ชัด)
+      async function fetchWithTimeout(url, options = {}, ms = 15000) {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), ms);
+        try {
+          return await fetch(url, { ...options, signal: controller.signal, cache: 'no-store' });
+        } finally {
+          clearTimeout(t);
+        }
+      }
 
       let html5QrCode = null;
       let scanning = false;
@@ -279,7 +293,7 @@
         try {
           const body = new URLSearchParams(payload);
 
-          const res = await fetch(ENDPOINT, { method: 'POST', body });
+          const res = await fetchWithTimeout(ENDPOINT, { method: 'POST', body }, 15000);
           const data = await res.json().catch(() => ({}));
 
           if (!data.ok) throw new Error(data.error || 'Save failed');
@@ -291,7 +305,7 @@
           $('barcode').focus();
           refresh();
         } catch (e) {
-          setStatus('Error: ' + (e?.message || e), 'err');
+          setStatus('Error: ' + (e?.name === 'AbortError' ? 'Request timeout' : (e?.message || e)), 'err');
         }
       }
 
@@ -299,11 +313,11 @@
         $('badge').textContent = 'Loading...';
         try {
           const url = ENDPOINT + '?fn=getRecentEntries&limit=30';
-          const res = await fetch(url, { method: 'GET' });
+          const res = await fetchWithTimeout(url, { method: 'GET' }, 15000);
           const data = await res.json();
           renderTable(data);
         } catch (e) {
-          $('tableWrap').textContent = 'Error loading: ' + (e?.message || e);
+          $('tableWrap').textContent = 'Error loading: ' + (e?.name === 'AbortError' ? 'Request timeout' : (e?.message || e));
           $('badge').textContent = 'Error';
         }
       }
@@ -335,8 +349,15 @@
         }[m]));
       }
 
-      window.onload = () => { applyTypeRules(); $('barcode').focus(); refresh(); };
-      document.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitEntry(); });
+      window.onload = () => {
+        applyTypeRules();
+        $('barcode').focus();
+        refresh();
+      };
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') submitEntry();
+      });
     </script>
   </body>
 </html>

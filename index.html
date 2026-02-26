@@ -7,6 +7,9 @@
     <link rel="apple-touch-icon" href="icon.png">
     <link rel="icon" href="icon.png">
 
+    <!-- ✅ iPhone-friendly barcode scanner -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+
     <style>
       :root{
         --bg:#ffffff;
@@ -164,7 +167,8 @@
         justify-content:center;
       }
 
-      .scanWrap{
+      /* html5-qrcode container */
+      #reader{
         display:none;
         margin-top:10px;
         border:1px solid var(--border);
@@ -172,22 +176,7 @@
         overflow:hidden;
         background:#000;
       }
-      video#preview{
-        width:100%;
-        display:block;
-      }
-      .scanBar{
-        display:flex;
-        justify-content:space-between;
-        gap:8px;
-        padding:8px;
-        background:#fff;
-      }
-      .scanHint{
-        font-size:13px;
-        color:var(--muted);
-        line-height:1.2;
-      }
+
       .smallBtn{
         padding:8px 10px;
         font-size:15px;
@@ -210,16 +199,10 @@
             <button class="scanBtn" type="button" onclick="startScan()">📷</button>
           </div>
 
-          <div id="scanWrap" class="scanWrap">
-            <video id="preview" playsinline></video>
-            <div class="scanBar">
-              <div class="scanHint">
-                เปิดกล้องแล้ว — เล็งให้ barcode อยู่กลางภาพ<br>
-                สแกนติดแล้วจะปิดอัตโนมัติ
-              </div>
-              <button class="smallBtn" type="button" onclick="stopScan()">✕ Close</button>
-            </div>
-          </div>
+          <div id="reader"></div>
+          <button id="closeScanBtn" class="smallBtn" type="button" onclick="stopScan()" style="display:none;margin-top:8px;">
+            ✕ Close
+          </button>
         </div>
 
         <div class="field">
@@ -298,89 +281,72 @@
       });
 
       /* =========================
-       *  CAMERA BARCODE SCAN
+       *  CAMERA BARCODE SCAN (html5-qrcode)
        * ========================= */
-      let _scanStream = null;
-      let _detector = null;
-      let _scanning = false;
-
-      function isSecureContextOk_(){
-        // Apps Script /exec เป็น https อยู่แล้ว แต่กันไว้
-        return window.isSecureContext || location.protocol === 'https:';
-      }
+      let html5QrCode = null;
+      let scanning = false;
 
       async function startScan() {
         try{
-          if (!isSecureContextOk_()) {
-            setStatus('Camera requires HTTPS', 'err');
-            return;
-          }
-          if (!navigator.mediaDevices?.getUserMedia) {
-            setStatus('This browser cannot access camera', 'err');
-            return;
-          }
-          if (!('BarcodeDetector' in window)) {
-            setStatus('Barcode scan not supported on this device/browser', 'err');
+          if (scanning) return;
+
+          if (!window.Html5Qrcode) {
+            setStatus('Scanner library not loaded', 'err');
             return;
           }
 
-          // formats ที่พบบ่อย: EAN13/EAN8/Code128/QR
-          _detector = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128','qr_code'] });
+          $('reader').style.display = 'block';
+          $('closeScanBtn').style.display = 'inline-block';
 
-          _scanStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: 'environment' } },
-            audio: false
-          });
+          if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
 
-          const video = $('preview');
-          video.srcObject = _scanStream;
+          const devices = await Html5Qrcode.getCameras();
+          if (!devices || !devices.length) {
+            setStatus('No camera found', 'err');
+            stopScan();
+            return;
+          }
 
-          $('scanWrap').style.display = 'block';
+          // เลือกกล้องหลัง ถ้าเจอ; ไม่เจอใช้ตัวแรก
+          const back = devices.find(d => String(d.label || '').toLowerCase().includes('back'));
+          const cameraId = (back && back.id) ? back.id : devices[0].id;
 
-          await video.play();
+          scanning = true;
 
-          _scanning = true;
-          requestAnimationFrame(scanLoop_);
-        }catch(err){
-          setStatus('Camera error: ' + (err?.message || err), 'err');
+          await html5QrCode.start(
+            cameraId,
+            { fps: 10, qrbox: 220, aspectRatio: 1.0 },
+            (decodedText) => {
+              // ได้ค่าแล้ว
+              $('barcode').value = String(decodedText || '').trim();
+              digitsOnly($('barcode'));
+              setStatus('Scanned ✅', 'ok');
+              stopScan();
+              $('barcode').focus();
+            },
+            (_err) => { /* ignore per-frame errors */ }
+          );
+
+        } catch (e) {
+          setStatus('Camera error: ' + (e?.message || e), 'err');
           stopScan();
         }
       }
 
-      async function scanLoop_(){
-        if (!_scanning) return;
-        const video = $('preview');
-
+      async function stopScan() {
         try{
-          const codes = await _detector.detect(video);
-          if (codes && codes.length){
-            const raw = String(codes[0].rawValue || '').trim();
-            if (raw){
-              $('barcode').value = raw;
-              digitsOnly($('barcode'));
-              stopScan();
-              $('barcode').focus();
-              setStatus('Scanned ✅', 'ok');
-              return;
-            }
+          scanning = false;
+          if (html5QrCode && html5QrCode.isScanning) {
+            await html5QrCode.stop();
           }
-        }catch(_){ /* ignore frame errors */ }
+          if (html5QrCode) {
+            // เคลียร์ UI ของ reader
+            html5QrCode.clear();
+          }
+        } catch (_) {}
 
-        requestAnimationFrame(scanLoop_);
-      }
-
-      function stopScan(){
-        _scanning = false;
-
-        const video = $('preview');
-        try{ video.pause(); } catch(_){}
-
-        if (_scanStream){
-          _scanStream.getTracks().forEach(t => t.stop());
-          _scanStream = null;
-        }
-
-        $('scanWrap').style.display = 'none';
+        $('reader').style.display = 'none';
+        $('closeScanBtn').style.display = 'none';
       }
 
       /* =========================

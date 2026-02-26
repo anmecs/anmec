@@ -148,10 +148,7 @@
         color:#9ca3af;
       }
 
-      /* กล่องแสดงกล้อง */
-      .videoWrap{
-        margin-top:10px;
-      }
+      .videoWrap{ margin-top:10px; }
       video{
         width:100%;
         border-radius:12px;
@@ -168,7 +165,6 @@
         <div class="field">
           <div class="label">Barcode (แตะช่องนี้แล้วสแกน)</div>
 
-          <!-- ✅ input + ปุ่มกล้อง -->
           <div style="display:flex; gap:8px; align-items:center;">
             <input id="barcode" type="tel" inputmode="numeric" pattern="[0-9]*"
                    placeholder="Scan barcode..." autocomplete="off"
@@ -176,7 +172,6 @@
             <button type="button" onclick="startScan()" title="Scan barcode">📷</button>
           </div>
 
-          <!-- ✅ preview กล้อง -->
           <div class="videoWrap">
             <video id="preview" playsinline style="display:none;"></video>
           </div>
@@ -245,10 +240,12 @@
     <script>
       const $ = (id) => document.getElementById(id);
 
-      // ✅ ใส่ลิ้งค์ Apps Script ใหม่ตรงนี้
-      const ENDPOINT = "https://script.google.com/macros/s/AKfycbwFSvXlrOZWZNnOlFAG6zOgJWimvdO4o_vOdOJejxfTf2ZSn9N82RLocmNxAryRrk_3lg/exec";
+      // ✅ ใช้ Vercel Proxy (ตัด CORS)
+      const API = "/api/stock";
 
-      // ✅ บังคับให้เป็น "ตัวเลขเท่านั้น" (กัน paste/คีย์บอร์ดอื่น)
+      // ❌ ไม่ใช้แล้ว (กันสับสน)
+      // const ENDPOINT = "https://script.google.com/macros/s/AKfy.../exec";
+
       function digitsOnly(el){
         el.value = (el.value || '').replace(/\D+/g, '');
       }
@@ -257,15 +254,11 @@
         el.addEventListener('input', () => digitsOnly(el));
       });
 
-      /* =========================
-       *  ✅ CAMERA BARCODE SCANNER
-       * ========================= */
       let stream = null;
       let detector = null;
       let scanning = false;
 
       async function startScan() {
-        // ต้องกดจาก user interaction ถึงจะเปิดกล้องได้
         if (!('BarcodeDetector' in window)) {
           setStatus('This browser does not support camera barcode scanning.', 'err');
           return;
@@ -310,7 +303,6 @@
             }
           }
         } catch (err) {
-          // ไม่ต้องโชว์ error ทุกเฟรม
           console.log(err);
         }
 
@@ -332,14 +324,10 @@
         }
       }
 
-      // ปิดกล้องถ้า user เปลี่ยนหน้า/ย่อแอป
       document.addEventListener('visibilitychange', () => {
         if (document.hidden) stopScan();
       });
 
-      /* =========================
-       *  ORIGINAL LOGIC (เดิม)
-       * ========================= */
       function applyTypeRules() {
         const t = $('type').value;
         $('whFrom').disabled = false;
@@ -412,11 +400,13 @@
         setStatus('Saving...');
 
         try {
-          const body = new URLSearchParams(payload);
+          const res = await fetch(API, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
 
-          const res = await fetch(ENDPOINT, { method: 'POST', body });
           const data = await res.json().catch(() => ({}));
-
           if (!data.ok) throw new Error(data.error || 'Save failed');
 
           setStatus('Saved ✅', 'ok');
@@ -433,10 +423,8 @@
       async function refresh() {
         $('badge').textContent = 'Loading...';
         try {
-          const url = ENDPOINT + '?fn=getRecentEntries&limit=30';
-          const res = await fetch(url, { method: 'GET' });
+          const res = await fetch(API + '?fn=getRecentEntries&limit=30', { method: 'GET' });
           const data = await res.json();
-
           renderTable(data);
         } catch (e) {
           $('tableWrap').textContent = 'Error loading: ' + (e?.message || e);

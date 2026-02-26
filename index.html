@@ -25,34 +25,29 @@
         color:var(--text);
         font-family: system-ui, -apple-system, Arial;
       }
-
       .page{
         width:100%;
         max-width: 320px;
         margin:0 auto;
         padding:18px 12px 28px;
       }
-
       h2{
         margin:6px 0 12px;
         font-size:32px;
         letter-spacing:-0.02em;
       }
-
       .card{
         padding:14px;
         border:1px solid var(--border);
         border-radius:var(--radius);
         background:#fff;
       }
-
       .field{ margin-bottom:12px; }
       .label{
         color:var(--muted);
         font-size:14px;
         margin:0 0 6px;
       }
-
       input, select, textarea{
         width:100%;
         border:1px solid var(--border);
@@ -63,20 +58,16 @@
         background:#fff;
       }
       textarea{ min-height:62px; resize:vertical; }
-
       input:focus, select:focus, textarea:focus{
         border-color:#cbd5e1;
         box-shadow:0 0 0 3px rgba(59,130,246,.12);
       }
-
       .row2{
         display:grid;
         grid-template-columns:1fr 1fr;
         gap:10px;
       }
-
       .actionsLabel{ margin:8px 0 8px; color:var(--muted); font-size:14px; }
-
       .btnRow{
         display:flex;
         gap:10px;
@@ -98,6 +89,7 @@
         margin-top:10px;
         font-size:15px;
         font-weight:600;
+        word-break: break-word;
       }
       .ok{ color:var(--ok); }
       .err{ color:var(--danger); }
@@ -142,12 +134,10 @@
         background:#fff;
         z-index:1;
       }
-
       select:disabled, input:disabled{
         background:#f3f4f6;
         color:#9ca3af;
       }
-
       .videoWrap{ margin-top:10px; }
       video{
         width:100%;
@@ -243,9 +233,6 @@
       // ✅ ใช้ Vercel Proxy (ตัด CORS)
       const API = "/api/stock";
 
-      // ❌ ไม่ใช้แล้ว (กันสับสน)
-      // const ENDPOINT = "https://script.google.com/macros/s/AKfy.../exec";
-
       function digitsOnly(el){
         el.value = (el.value || '').replace(/\D+/g, '');
       }
@@ -254,6 +241,22 @@
         el.addEventListener('input', () => digitsOnly(el));
       });
 
+      // ✅ อ่าน response แบบปลอดภัย: ถ้าไม่ใช่ JSON จะโชว์ HTML preview
+      async function readJsonOrThrow(res) {
+        const text = await res.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error('API not JSON: ' + text.slice(0, 200));
+        }
+        if (!res.ok) throw new Error(data?.error || ('HTTP ' + res.status));
+        return data;
+      }
+
+      /* =========================
+       *  ✅ CAMERA BARCODE SCANNER
+       * ========================= */
       let stream = null;
       let detector = null;
       let scanning = false;
@@ -406,7 +409,7 @@
             body: JSON.stringify(payload)
           });
 
-          const data = await res.json().catch(() => ({}));
+          const data = await readJsonOrThrow(res);
           if (!data.ok) throw new Error(data.error || 'Save failed');
 
           setStatus('Saved ✅', 'ok');
@@ -424,7 +427,7 @@
         $('badge').textContent = 'Loading...';
         try {
           const res = await fetch(API + '?fn=getRecentEntries&limit=30', { method: 'GET' });
-          const data = await res.json();
+          const data = await readJsonOrThrow(res);
           renderTable(data);
         } catch (e) {
           $('tableWrap').textContent = 'Error loading: ' + (e?.message || e);

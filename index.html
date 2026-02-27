@@ -231,6 +231,18 @@
           </div>
         </div>
 
+        <!-- ✅ NEW: Show SKU/Name -->
+        <div class="row2">
+          <div class="field">
+            <div class="label">SKU (auto)</div>
+            <input id="sku" type="text" placeholder="-" readonly>
+          </div>
+          <div class="field">
+            <div class="label">Name (auto)</div>
+            <input id="pname" type="text" placeholder="-" readonly>
+          </div>
+        </div>
+
         <div class="field">
           <div class="label">Type</div>
           <select id="type">
@@ -282,7 +294,7 @@
         </div>
 
         <div id="status" class="status"></div>
-        <div class="muted">Tip: หลัง Save ระบบจะเคลียร์ Barcode/Qty/Note แล้วโฟกัสกลับไปที่ Barcode ให้อัตโนมัติ</div>
+        <div class="muted">Tip: หลัง Save ระบบจะเคลียร์ Barcode/Qty/Note (และ SKU/Name) แล้วโฟกัสกลับไปที่ Barcode ให้อัตโนมัติ</div>
       </div>
 
       <div class="sectionTitle">
@@ -327,6 +339,46 @@
         return check === (s.charCodeAt(12) - 48);
       }
 
+      // ✅ NEW: barcode -> lookup sku/name (debounced)
+      let lookupTimer = null;
+
+      function clearSkuName(){
+        $('sku').value = '';
+        $('pname').value = '';
+      }
+
+      async function lookupSkuByBarcode(barcode){
+        if (!ean13Valid(barcode)) {
+          clearSkuName();
+          return;
+        }
+
+        $('sku').value = 'Loading...';
+        $('pname').value = 'Loading...';
+
+        try{
+          const url = ENDPOINT + '?fn=lookupBarcode&barcode=' + encodeURIComponent(barcode);
+          const res = await fetch(url, { method:'GET' });
+          const data = await res.json().catch(() => ({}));
+          if (!data.ok) throw new Error(data.error || 'Lookup failed');
+
+          $('sku').value = data.sku || 'NOT FOUND';
+          $('pname').value = data.name || '';
+
+        }catch(e){
+          clearSkuName();
+          setStatus('Lookup error: ' + (e?.message || e), 'err');
+        }
+      }
+
+      function scheduleLookup(){
+        clearTimeout(lookupTimer);
+        lookupTimer = setTimeout(() => lookupSkuByBarcode($('barcode').value.trim()), 150);
+      }
+
+      $('barcode').addEventListener('input', scheduleLookup);
+      $('barcode').addEventListener('change', scheduleLookup);
+
       let zxingReader = null;
       let zxingControls = null;
 
@@ -350,6 +402,7 @@
                 const digits = code.replace(/\D+/g, '');
                 if (ean13Valid(digits)) {
                   $('barcode').value = digits;
+                  lookupSkuByBarcode(digits); // ✅ lookup immediately
                   closeScan();
                   setStatus('Scanned ✅', 'ok');
                   $('qty').focus();
@@ -412,6 +465,7 @@
         $('barcode').value = '';
         $('qty').value = '';
         $('note').value = '';
+        clearSkuName(); // ✅
         $('barcode').focus();
         setStatus('');
       }
@@ -419,6 +473,11 @@
       function validate(payload) {
         if (!payload.barcode) return 'Please scan/enter barcode';
         if (!ean13Valid(payload.barcode)) return 'Barcode must be valid EAN-13 (13 digits)';
+
+        // ✅ NEW: block save if sku not found
+        const sku = ($('sku')?.value || '').trim();
+        if (!sku || sku === 'NOT FOUND' || sku === 'Loading...') return 'SKU not found. Please add barcode to Products first.';
+
         if (!payload.type) return 'Please select Type';
 
         const q = Number(payload.qty);
@@ -468,6 +527,7 @@
           $('barcode').value = '';
           $('qty').value = '';
           $('note').value = '';
+          clearSkuName(); // ✅
           $('barcode').focus();
           refresh();
         } catch (e) {

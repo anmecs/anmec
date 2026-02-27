@@ -133,7 +133,81 @@
         background:#f3f4f6;
         color:#9ca3af;
       }
+
+      .inlineRow{
+        display:flex;
+        gap:8px;
+        align-items:center;
+      }
+      .iconBtn{
+        width:44px;
+        min-width:44px;
+        height:44px;
+        padding:0;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        border-radius:12px;
+        color:#111827;
+        background:#fff;
+        border:1px solid var(--border);
+      }
+
+      .modal{
+        position:fixed;
+        inset:0;
+        background:rgba(0,0,0,.45);
+        display:none;
+        align-items:center;
+        justify-content:center;
+        padding:14px;
+        z-index:9999;
+      }
+      .modal.open{ display:flex; }
+      .modalCard{
+        width:min(420px, 100%);
+        background:#fff;
+        border-radius:18px;
+        border:1px solid var(--border);
+        overflow:hidden;
+      }
+      .modalHead{
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        padding:12px 12px;
+        border-bottom:1px solid var(--border);
+      }
+      .modalTitle{
+        font-weight:800;
+        letter-spacing:-0.01em;
+      }
+      .closeBtn{
+        border:1px solid var(--border);
+        background:var(--soft);
+        color:#111827;
+        padding:8px 10px;
+        font-size:14px;
+        border-radius:12px;
+      }
+      .modalBody{
+        padding:12px;
+      }
+      video{
+        width:100%;
+        border-radius:12px;
+        border:1px solid var(--border);
+        background:#000;
+      }
+      .scanHint{
+        margin-top:10px;
+        color:var(--muted);
+        font-size:13px;
+        line-height:1.35;
+      }
     </style>
+
+    <script src="https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js"></script>
   </head>
 
   <body>
@@ -143,8 +217,11 @@
       <div class="card">
         <div class="field">
           <div class="label">Barcode (แตะช่องนี้แล้วสแกน)</div>
-          <input id="barcode" type="tel" inputmode="numeric" pattern="[0-9]*"
-                 placeholder="Scan barcode..." autocomplete="off">
+          <div class="inlineRow">
+            <input id="barcode" type="tel" inputmode="numeric" pattern="[0-9]*"
+                   placeholder="Scan barcode..." autocomplete="off" style="flex:1;">
+            <button class="iconBtn" type="button" onclick="openScan()" aria-label="Scan EAN13">📷</button>
+          </div>
         </div>
 
         <div class="field">
@@ -207,6 +284,19 @@
       <div class="card" id="tableWrap">Loading...</div>
     </div>
 
+    <div class="modal" id="scanModal" role="dialog" aria-modal="true" aria-label="Scan EAN-13">
+      <div class="modalCard">
+        <div class="modalHead">
+          <div class="modalTitle">Scan EAN-13</div>
+          <button class="closeBtn" type="button" onclick="closeScan()">Close</button>
+        </div>
+        <div class="modalBody">
+          <video id="scanVideo" playsinline></video>
+          <div class="scanHint">รองรับเฉพาะ Barcode_EAN13 (13 หลัก) เท่านั้น</div>
+        </div>
+      </div>
+    </div>
+
     <script>
       const $ = (id) => document.getElementById(id);
       const ENDPOINT = "/api/stock";
@@ -217,6 +307,77 @@
       ['barcode','qty'].forEach(id => {
         const el = $(id);
         el.addEventListener('input', () => digitsOnly(el));
+      });
+
+      function ean13Valid(s){
+        if (!/^\d{13}$/.test(s)) return false;
+        let sum = 0;
+        for (let i = 0; i < 12; i++){
+          const n = s.charCodeAt(i) - 48;
+          sum += (i % 2 === 0) ? n : (n * 3);
+        }
+        const check = (10 - (sum % 10)) % 10;
+        return check === (s.charCodeAt(12) - 48);
+      }
+
+      let zxingReader = null;
+      let zxingControls = null;
+
+      async function openScan(){
+        try{
+          $('scanModal').classList.add('open');
+          setStatus('Opening camera...', '');
+
+          if (!window.ZXingBrowser) throw new Error('Scanner library not loaded');
+
+          zxingReader = zxingReader || new ZXingBrowser.BrowserMultiFormatReader();
+
+          const videoEl = $('scanVideo');
+
+          zxingControls = await zxingReader.decodeFromVideoDevice(
+            undefined,
+            videoEl,
+            (result, err, controls) => {
+              if (!zxingControls) zxingControls = controls || zxingControls;
+              if (result) {
+                const code = String(result.getText ? result.getText() : result.text || '').trim();
+                const digits = code.replace(/\D+/g, '');
+                if (ean13Valid(digits)) {
+                  $('barcode').value = digits;
+                  closeScan();
+                  setStatus('Scanned ✅', 'ok');
+                  $('qty').focus();
+                }
+              }
+            }
+          );
+
+          setStatus('Scanning...', '');
+        } catch (e){
+          closeScan();
+          setStatus('Camera error: ' + (e?.message || e), 'err');
+        }
+      }
+
+      function closeScan(){
+        $('scanModal').classList.remove('open');
+        try{
+          if (zxingControls && typeof zxingControls.stop === 'function') zxingControls.stop();
+        } catch(_){}
+        zxingControls = null;
+        const v = $('scanVideo');
+        try{
+          v.pause();
+          v.srcObject = null;
+        } catch(_){}
+      }
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) closeScan();
+      });
+
+      $('scanModal').addEventListener('click', (e) => {
+        if (e.target && e.target.id === 'scanModal') closeScan();
       });
 
       function applyTypeRules() {
@@ -241,6 +402,7 @@
       }
 
       function clearForm() {
+        closeScan();
         $('barcode').value = '';
         $('qty').value = '';
         $('note').value = '';
@@ -250,6 +412,7 @@
 
       function validate(payload) {
         if (!payload.barcode) return 'Please scan/enter barcode';
+        if (!ean13Valid(payload.barcode)) return 'Barcode must be valid EAN-13 (13 digits)';
         if (!payload.type) return 'Please select Type';
 
         const q = Number(payload.qty);
@@ -273,6 +436,7 @@
 
       async function submitEntry() {
         applyTypeRules();
+        closeScan();
 
         const payload = {
           barcode: $('barcode').value.trim(),

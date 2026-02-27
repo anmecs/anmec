@@ -7,6 +7,9 @@
     <link rel="apple-touch-icon" href="icon.png">
     <link rel="icon" href="icon.png">
 
+    <!-- ✅ Fallback barcode scanner (works on more browsers, incl. many iPhones/iOS/Android WebView) -->
+    <script src="https://unpkg.com/@zxing/browser@latest"></script>
+
     <style>
       :root{
         --bg:#ffffff;
@@ -245,10 +248,10 @@
     <script>
       const $ = (id) => document.getElementById(id);
 
-      // ✅ ใส่ลิ้งค์ Apps Script ใหม่ตรงนี้
+      // ✅ call Vercel proxy (same-origin)
       const ENDPOINT = "/api/stock";
 
-      // ✅ บังคับให้เป็น "ตัวเลขเท่านั้น" (กัน paste/คีย์บอร์ดอื่น)
+      // ✅ digits only
       function digitsOnly(el){
         el.value = (el.value || '').replace(/\D+/g, '');
       }
@@ -259,41 +262,68 @@
 
       /* =========================
        *  ✅ CAMERA BARCODE SCANNER
+       *  - Use native BarcodeDetector if available
+       *  - Fallback to ZXing (@zxing/browser) if not
        * ========================= */
       let stream = null;
       let detector = null;
       let scanning = false;
+      let zxingReader = null;
 
       async function startScan() {
-        // ต้องกดจาก user interaction ถึงจะเปิดกล้องได้
-        if (!('BarcodeDetector' in window)) {
-          setStatus('This browser does not support camera barcode scanning.', 'err');
-          return;
-        }
-
         try {
           setStatus('Opening camera...', '');
-          detector = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128','qr_code'] });
 
+          const video = $('preview');
+          video.style.display = 'block';
+
+          // Open camera stream
           stream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: { ideal: 'environment' } }
           });
 
-          const video = $('preview');
           video.srcObject = stream;
-          video.style.display = 'block';
           await video.play();
 
-          scanning = true;
-          requestAnimationFrame(scanFrame);
-          setStatus('Scanning... aim at the barcode', '');
+          // ✅ Prefer native BarcodeDetector
+          if ('BarcodeDetector' in window) {
+            detector = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128','qr_code'] });
+            scanning = true;
+            setStatus('Scanning... aim at the barcode', '');
+            requestAnimationFrame(scanFrameNative);
+            return;
+          }
+
+          // ✅ Fallback: ZXing
+          if (window.ZXingBrowser && window.ZXingBrowser.BrowserMultiFormatReader) {
+            zxingReader = new ZXingBrowser.BrowserMultiFormatReader();
+            setStatus('Scanning... aim at the barcode', '');
+
+            zxingReader.decodeFromVideoElementContinuously(video, (result, err) => {
+              if (result) {
+                const code = String(result.getText() || '').trim();
+                if (code) {
+                  $('barcode').value = code;
+                  digitsOnly($('barcode'));
+                  stopScan();
+                  setStatus('Scanned ✅', 'ok');
+                }
+              }
+            });
+            return;
+          }
+
+          // No supported scanner
+          stopScan();
+          setStatus('This browser does not support camera barcode scanning.', 'err');
 
         } catch (err) {
+          stopScan();
           setStatus('Camera error: ' + (err?.message || err), 'err');
         }
       }
 
-      async function scanFrame() {
+      async function scanFrameNative() {
         if (!scanning) return;
 
         const video = $('preview');
@@ -310,15 +340,23 @@
             }
           }
         } catch (err) {
-          // ไม่ต้องโชว์ error ทุกเฟรม
-          console.log(err);
+          // ignore per-frame errors
         }
 
-        requestAnimationFrame(scanFrame);
+        requestAnimationFrame(scanFrameNative);
       }
 
       function stopScan() {
         scanning = false;
+
+        // stop zxing
+        try {
+          if (zxingReader) {
+            zxingReader.reset();
+            zxingReader = null;
+          }
+        } catch (_) {}
+
         const video = $('preview');
 
         if (stream) {
@@ -332,7 +370,7 @@
         }
       }
 
-      // ปิดกล้องถ้า user เปลี่ยนหน้า/ย่อแอป
+      // Close camera if tab/app hidden
       document.addEventListener('visibilitychange', () => {
         if (document.hidden) stopScan();
       });
@@ -486,4 +524,3 @@
     </script>
   </body>
 </html>
-

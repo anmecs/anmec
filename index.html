@@ -207,7 +207,14 @@
       }
     </style>
 
-    <script src="https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js"></script>
+    <script src="https://unpkg.com/@zxing/browser@0.1.5/umd/zxing-browser.min.js"></script>
+    <script>
+      if (!window.ZXingBrowser) {
+        const s = document.createElement('script');
+        s.src = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js";
+        document.head.appendChild(s);
+      }
+    </script>
   </head>
 
   <body>
@@ -331,7 +338,6 @@
           if (!window.ZXingBrowser) throw new Error('Scanner library not loaded');
 
           zxingReader = zxingReader || new ZXingBrowser.BrowserMultiFormatReader();
-
           const videoEl = $('scanVideo');
 
           zxingControls = await zxingReader.decodeFromVideoDevice(

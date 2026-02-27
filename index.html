@@ -7,7 +7,7 @@
     <link rel="apple-touch-icon" href="icon.png">
     <link rel="icon" href="icon.png">
 
-    <!-- ✅ Fallback barcode scanner (works on more browsers, incl. many iPhones/iOS/Android WebView) -->
+    <!-- ✅ ZXing fallback scanner (works on more browsers) -->
     <script src="https://unpkg.com/@zxing/browser@latest"></script>
 
     <style>
@@ -28,34 +28,29 @@
         color:var(--text);
         font-family: system-ui, -apple-system, Arial;
       }
-
       .page{
         width:100%;
         max-width: 320px;
         margin:0 auto;
         padding:18px 12px 28px;
       }
-
       h2{
         margin:6px 0 12px;
         font-size:32px;
         letter-spacing:-0.02em;
       }
-
       .card{
         padding:14px;
         border:1px solid var(--border);
         border-radius:var(--radius);
         background:#fff;
       }
-
       .field{ margin-bottom:12px; }
       .label{
         color:var(--muted);
         font-size:14px;
         margin:0 0 6px;
       }
-
       input, select, textarea{
         width:100%;
         border:1px solid var(--border);
@@ -66,20 +61,16 @@
         background:#fff;
       }
       textarea{ min-height:62px; resize:vertical; }
-
       input:focus, select:focus, textarea:focus{
         border-color:#cbd5e1;
         box-shadow:0 0 0 3px rgba(59,130,246,.12);
       }
-
       .row2{
         display:grid;
         grid-template-columns:1fr 1fr;
         gap:10px;
       }
-
       .actionsLabel{ margin:8px 0 8px; color:var(--muted); font-size:14px; }
-
       .btnRow{
         display:flex;
         gap:10px;
@@ -96,7 +87,6 @@
         cursor:pointer;
       }
       button:active{ transform:scale(.99); }
-
       .status{
         margin-top:10px;
         font-size:15px;
@@ -104,14 +94,12 @@
       }
       .ok{ color:var(--ok); }
       .err{ color:var(--danger); }
-
       .muted{
         margin-top:10px;
         color:var(--muted);
         font-size:14px;
         line-height:1.35;
       }
-
       .sectionTitle{
         display:flex;
         align-items:center;
@@ -130,7 +118,6 @@
         color:var(--muted);
         font-weight:500;
       }
-
       table{ width:100%; border-collapse:collapse; margin-top: 0; }
       th, td{
         border-bottom: 1px solid var(--border);
@@ -145,16 +132,11 @@
         background:#fff;
         z-index:1;
       }
-
       select:disabled, input:disabled{
         background:#f3f4f6;
         color:#9ca3af;
       }
-
-      /* กล่องแสดงกล้อง */
-      .videoWrap{
-        margin-top:10px;
-      }
+      .videoWrap{ margin-top:10px; }
       video{
         width:100%;
         border-radius:12px;
@@ -171,7 +153,6 @@
         <div class="field">
           <div class="label">Barcode (แตะช่องนี้แล้วสแกน)</div>
 
-          <!-- ✅ input + ปุ่มกล้อง -->
           <div style="display:flex; gap:8px; align-items:center;">
             <input id="barcode" type="tel" inputmode="numeric" pattern="[0-9]*"
                    placeholder="Scan barcode..." autocomplete="off"
@@ -179,7 +160,6 @@
             <button type="button" onclick="startScan()" title="Scan barcode">📷</button>
           </div>
 
-          <!-- ✅ preview กล้อง -->
           <div class="videoWrap">
             <video id="preview" playsinline style="display:none;"></video>
           </div>
@@ -247,9 +227,7 @@
 
     <script>
       const $ = (id) => document.getElementById(id);
-
-      // ✅ call Vercel proxy (same-origin)
-      const ENDPOINT = "/api/stock";
+      const ENDPOINT = "/api/stock"; // Vercel proxy
 
       // ✅ digits only
       function digitsOnly(el){
@@ -261,9 +239,9 @@
       });
 
       /* =========================
-       *  ✅ CAMERA BARCODE SCANNER
-       *  - Use native BarcodeDetector if available
-       *  - Fallback to ZXing (@zxing/browser) if not
+       *  ✅ CAMERA BARCODE SCANNER (EAN-13 only)
+       *  - Prefer native BarcodeDetector (ean_13 only)
+       *  - Fallback to ZXing (EAN-13 only)
        * ========================= */
       let stream = null;
       let detector = null;
@@ -277,7 +255,6 @@
           const video = $('preview');
           video.style.display = 'block';
 
-          // Open camera stream
           stream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: { ideal: 'environment' } }
           });
@@ -285,36 +262,56 @@
           video.srcObject = stream;
           await video.play();
 
-          // ✅ Prefer native BarcodeDetector
+          // ✅ Native BarcodeDetector (EAN-13 only)
           if ('BarcodeDetector' in window) {
-            detector = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128','qr_code'] });
+            detector = new BarcodeDetector({ formats: ['ean_13'] });
             scanning = true;
-            setStatus('Scanning... aim at the barcode', '');
+            setStatus('Scanning EAN-13... aim at the barcode', '');
             requestAnimationFrame(scanFrameNative);
             return;
           }
 
-         // ✅ Fallback: ZXing (@zxing/browser)
-if (window.ZXingBrowser && window.ZXingBrowser.BrowserMultiFormatReader) {
-  zxingReader = new ZXingBrowser.BrowserMultiFormatReader();
-  setStatus('Scanning... aim at the barcode', '');
+          // ✅ Fallback: ZXing (EAN-13 only via EAN13Reader)
+          if (window.ZXingBrowser && window.ZXingBrowser.BrowserMultiFormatReader) {
+            const hints = new Map();
 
-  // deviceId = null => ใช้กล้องหลังที่เหมาะสม (ถ้าเลือกได้)
-  zxingReader.decodeFromVideoDevice(null, video, (result, err) => {
-    if (result) {
-      const code = String(result.getText ? result.getText() : result.text || '').trim();
-      if (code) {
-        $('barcode').value = code;
-        digitsOnly($('barcode'));
-        stopScan();
-        setStatus('Scanned ✅', 'ok');
-      }
-    }
-    // err จะเกิดบ่อยตอนยังไม่เจอบาร์โค้ด ไม่ต้องโชว์
-  });
+            // ZXing global might be available depending on bundle; try both
+            const ZX = window.ZXing || window.zxing || null;
 
-  return;
-}
+            // If ZXing core enums are present, restrict to EAN_13
+            try {
+              if (ZX && ZX.DecodeHintType && ZX.BarcodeFormat) {
+                hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS, [ZX.BarcodeFormat.EAN_13]);
+              }
+            } catch (_) {}
+
+            // Use reader with hints (if hints not supported, it still works)
+            try {
+              zxingReader = new ZXingBrowser.BrowserMultiFormatReader(hints);
+            } catch (_) {
+              zxingReader = new ZXingBrowser.BrowserMultiFormatReader();
+            }
+
+            setStatus('Scanning EAN-13... aim at the barcode', '');
+
+            // decodeFromVideoDevice scans continuously until reset()
+            zxingReader.decodeFromVideoDevice(null, video, (result, err) => {
+              if (result) {
+                const code = String(result.getText ? result.getText() : result.text || '').trim();
+
+                // Extra safety: EAN-13 is 13 digits
+                if (/^\d{13}$/.test(code)) {
+                  $('barcode').value = code;
+                  digitsOnly($('barcode'));
+                  stopScan();
+                  setStatus('Scanned ✅', 'ok');
+                }
+              }
+              // ignore err (common when no barcode detected yet)
+            });
+
+            return;
+          }
 
           // No supported scanner
           stopScan();
@@ -328,13 +325,13 @@ if (window.ZXingBrowser && window.ZXingBrowser.BrowserMultiFormatReader) {
 
       async function scanFrameNative() {
         if (!scanning) return;
-
         const video = $('preview');
+
         try {
           const barcodes = await detector.detect(video);
           if (barcodes && barcodes.length) {
             const code = String(barcodes[0].rawValue || '').trim();
-            if (code) {
+            if (/^\d{13}$/.test(code)) {
               $('barcode').value = code;
               digitsOnly($('barcode'));
               stopScan();
@@ -342,9 +339,7 @@ if (window.ZXingBrowser && window.ZXingBrowser.BrowserMultiFormatReader) {
               return;
             }
           }
-        } catch (err) {
-          // ignore per-frame errors
-        }
+        } catch (_) {}
 
         requestAnimationFrame(scanFrameNative);
       }
@@ -373,13 +368,12 @@ if (window.ZXingBrowser && window.ZXingBrowser.BrowserMultiFormatReader) {
         }
       }
 
-      // Close camera if tab/app hidden
       document.addEventListener('visibilitychange', () => {
         if (document.hidden) stopScan();
       });
 
       /* =========================
-       *  ORIGINAL LOGIC (เดิม)
+       *  ORIGINAL LOGIC
        * ========================= */
       function applyTypeRules() {
         const t = $('type').value;
@@ -454,10 +448,8 @@ if (window.ZXingBrowser && window.ZXingBrowser.BrowserMultiFormatReader) {
 
         try {
           const body = new URLSearchParams(payload);
-
           const res = await fetch(ENDPOINT, { method: 'POST', body });
           const data = await res.json().catch(() => ({}));
-
           if (!data.ok) throw new Error(data.error || 'Save failed');
 
           setStatus('Saved ✅', 'ok');
@@ -477,7 +469,6 @@ if (window.ZXingBrowser && window.ZXingBrowser.BrowserMultiFormatReader) {
           const url = ENDPOINT + '?fn=getRecentEntries&limit=30';
           const res = await fetch(url, { method: 'GET' });
           const data = await res.json();
-
           renderTable(data);
         } catch (e) {
           $('tableWrap').textContent = 'Error loading: ' + (e?.message || e);
@@ -527,4 +518,3 @@ if (window.ZXingBrowser && window.ZXingBrowser.BrowserMultiFormatReader) {
     </script>
   </body>
 </html>
-

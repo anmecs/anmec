@@ -294,24 +294,27 @@
             return;
           }
 
-          // ✅ Fallback: ZXing
-          if (window.ZXingBrowser && window.ZXingBrowser.BrowserMultiFormatReader) {
-            zxingReader = new ZXingBrowser.BrowserMultiFormatReader();
-            setStatus('Scanning... aim at the barcode', '');
+         // ✅ Fallback: ZXing (@zxing/browser)
+if (window.ZXingBrowser && window.ZXingBrowser.BrowserMultiFormatReader) {
+  zxingReader = new ZXingBrowser.BrowserMultiFormatReader();
+  setStatus('Scanning... aim at the barcode', '');
 
-            zxingReader.decodeFromVideoElementContinuously(video, (result, err) => {
-              if (result) {
-                const code = String(result.getText() || '').trim();
-                if (code) {
-                  $('barcode').value = code;
-                  digitsOnly($('barcode'));
-                  stopScan();
-                  setStatus('Scanned ✅', 'ok');
-                }
-              }
-            });
-            return;
-          }
+  // deviceId = null => ใช้กล้องหลังที่เหมาะสม (ถ้าเลือกได้)
+  zxingReader.decodeFromVideoDevice(null, video, (result, err) => {
+    if (result) {
+      const code = String(result.getText ? result.getText() : result.text || '').trim();
+      if (code) {
+        $('barcode').value = code;
+        digitsOnly($('barcode'));
+        stopScan();
+        setStatus('Scanned ✅', 'ok');
+      }
+    }
+    // err จะเกิดบ่อยตอนยังไม่เจอบาร์โค้ด ไม่ต้องโชว์
+  });
+
+  return;
+}
 
           // No supported scanner
           stopScan();
@@ -524,3 +527,4 @@
     </script>
   </body>
 </html>
+

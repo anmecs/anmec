@@ -158,6 +158,7 @@
                    placeholder="Scan barcode..." autocomplete="off"
                    style="flex:1;">
             <button type="button" onclick="startScan()" title="Scan barcode">📷</button>
+            <button type="button" onclick="closeCamera()" title="Close camera">✖</button>
           </div>
 
           <div class="videoWrap">
@@ -240,93 +241,122 @@
 
       /* =========================
        *  ✅ CAMERA BARCODE SCANNER (EAN-13 only)
-       *  - Prefer native BarcodeDetector (ean_13 only)
-       *  - Fallback to ZXing (EAN-13 only)
+       *  - Open camera ONCE (permission less often)
+       *  - Stop decoding after found, but KEEP camera stream
+       *  - Close camera only when user presses ✖
        * ========================= */
       let stream = null;
       let detector = null;
       let scanning = false;
       let zxingReader = null;
+      let decodingMode = ''; // 'native' | 'zxing' | ''
+
+      async function ensureCamera_() {
+        if (stream) return;
+
+        const video = $('preview');
+        video.style.display = 'block';
+
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } }
+        });
+
+        video.srcObject = stream;
+        await video.play();
+      }
+
+      function stopDecoding_() {
+        scanning = false;
+        detector = null;
+
+        try {
+          if (zxingReader) {
+            zxingReader.reset();
+            zxingReader = null;
+          }
+        } catch (_) {}
+
+        decodingMode = '';
+      }
+
+      function closeCamera() {
+        stopDecoding_();
+
+        const video = $('preview');
+
+        if (stream) {
+          stream.getTracks().forEach(t => t.stop());
+          stream = null;
+        }
+
+        if (video) {
+          video.pause();
+          video.srcObject = null;
+          video.style.display = 'none';
+        }
+
+        setStatus('Camera closed', '');
+      }
 
       async function startScan() {
         try {
           setStatus('Opening camera...', '');
 
+          await ensureCamera_();
+
           const video = $('preview');
           video.style.display = 'block';
 
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: 'environment' } }
-          });
-
-          video.srcObject = stream;
-          await video.play();
+          // already scanning
+          if (decodingMode) {
+            setStatus('Scanning EAN-13... aim at the barcode', '');
+            return;
+          }
 
           // ✅ Native BarcodeDetector (EAN-13 only)
           if ('BarcodeDetector' in window) {
             detector = new BarcodeDetector({ formats: ['ean_13'] });
             scanning = true;
+            decodingMode = 'native';
             setStatus('Scanning EAN-13... aim at the barcode', '');
             requestAnimationFrame(scanFrameNative);
             return;
           }
 
-          // ✅ Fallback: ZXing (EAN-13 only via EAN13Reader)
+          // ✅ Fallback: ZXing
           if (window.ZXingBrowser && window.ZXingBrowser.BrowserMultiFormatReader) {
-            const hints = new Map();
-
-            // ZXing global might be available depending on bundle; try both
-            const ZX = window.ZXing || window.zxing || null;
-
-            // If ZXing core enums are present, restrict to EAN_13
-            try {
-              if (ZX && ZX.DecodeHintType && ZX.BarcodeFormat) {
-                hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS, [ZX.BarcodeFormat.EAN_13]);
-              }
-            } catch (_) {}
-
-            // Use reader with hints (if hints not supported, it still works)
-            try {
-              zxingReader = new ZXingBrowser.BrowserMultiFormatReader(hints);
-            } catch (_) {
-              zxingReader = new ZXingBrowser.BrowserMultiFormatReader();
-            }
-
+            zxingReader = new ZXingBrowser.BrowserMultiFormatReader();
+            decodingMode = 'zxing';
             setStatus('Scanning EAN-13... aim at the barcode', '');
 
-            // decodeFromVideoDevice scans continuously until reset()
             zxingReader.decodeFromVideoDevice(null, video, (result, err) => {
               if (result) {
                 const code = String(result.getText ? result.getText() : result.text || '').trim();
-
-                // Extra safety: EAN-13 is 13 digits
                 if (/^\d{13}$/.test(code)) {
                   $('barcode').value = code;
                   digitsOnly($('barcode'));
-                  stopScan();
+                  stopDecoding_();       // ✅ stop scanning but keep camera
+                  video.style.display = 'none'; // optional: hide preview
                   setStatus('Scanned ✅', 'ok');
                 }
               }
-              // ignore err (common when no barcode detected yet)
+              // ignore err
             });
 
             return;
           }
 
-          // No supported scanner
-          stopScan();
           setStatus('This browser does not support camera barcode scanning.', 'err');
-
         } catch (err) {
-          stopScan();
+          stopDecoding_();
           setStatus('Camera error: ' + (err?.message || err), 'err');
         }
       }
 
       async function scanFrameNative() {
-        if (!scanning) return;
-        const video = $('preview');
+        if (!scanning || decodingMode !== 'native') return;
 
+        const video = $('preview');
         try {
           const barcodes = await detector.detect(video);
           if (barcodes && barcodes.length) {
@@ -334,7 +364,8 @@
             if (/^\d{13}$/.test(code)) {
               $('barcode').value = code;
               digitsOnly($('barcode'));
-              stopScan();
+              stopDecoding_();       // ✅ stop scanning but keep camera
+              video.style.display = 'none'; // optional: hide preview
               setStatus('Scanned ✅', 'ok');
               return;
             }
@@ -344,32 +375,9 @@
         requestAnimationFrame(scanFrameNative);
       }
 
-      function stopScan() {
-        scanning = false;
-
-        // stop zxing
-        try {
-          if (zxingReader) {
-            zxingReader.reset();
-            zxingReader = null;
-          }
-        } catch (_) {}
-
-        const video = $('preview');
-
-        if (stream) {
-          stream.getTracks().forEach(t => t.stop());
-          stream = null;
-        }
-        if (video) {
-          video.pause();
-          video.srcObject = null;
-          video.style.display = 'none';
-        }
-      }
-
+      // when app hidden: stop decoding (keep stream)
       document.addEventListener('visibilitychange', () => {
-        if (document.hidden) stopScan();
+        if (document.hidden) stopDecoding_();
       });
 
       /* =========================
@@ -397,7 +405,8 @@
       }
 
       function clearForm() {
-        stopScan();
+        // do NOT close camera; just stop decoding if running
+        stopDecoding_();
         $('barcode').value = '';
         $('qty').value = '';
         $('note').value = '';
@@ -430,7 +439,8 @@
 
       async function submitEntry() {
         applyTypeRules();
-        stopScan();
+        // IMPORTANT: don't close camera, just stop decoding
+        stopDecoding_();
 
         const payload = {
           barcode: $('barcode').value.trim(),
